@@ -111,11 +111,18 @@ export const usePdfExport = () => {
       const pageHeight = 297
       const marginX = 10
       const marginTop = 12
-      const imgWidth = pageWidth - marginX * 2
-      const imgHeight = (options.canvas.height / options.canvas.width) * imgWidth
+      const maxImgWidth = pageWidth - marginX * 2
+      const maxImgHeight = pageHeight - marginTop * 2
+      const aspect = options.canvas.width / options.canvas.height
+      let imgWidth = maxImgWidth
+      let imgHeight = imgWidth / aspect
+      if (imgHeight > maxImgHeight) {
+        imgHeight = maxImgHeight
+        imgWidth = imgHeight * aspect
+      }
+      const imgX = marginX + (maxImgWidth - imgWidth) / 2
 
-      const safeImgHeight = Math.min(imgHeight, 120)
-      pdf.addImage(imgData, 'PNG', marginX, marginTop, imgWidth, safeImgHeight)
+      pdf.addImage(imgData, 'PNG', imgX, marginTop, imgWidth, imgHeight)
 
       const summary = options.chatHistory
         .slice(-6)
@@ -137,7 +144,7 @@ export const usePdfExport = () => {
         const textImg = textCanvas.toDataURL('image/png')
         const textWidth = imgWidth
         const textHeight = (textCanvas.height / textCanvas.width) * textWidth
-        let textY = marginTop + safeImgHeight + 10
+        let textY = marginTop + imgHeight + 10
 
         if (textY + textHeight > pageHeight - marginTop) {
           pdf.addPage()
