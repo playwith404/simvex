@@ -113,7 +113,7 @@ export const Viewer = () => {
     <div className="viewer-page">
       <div className="viewer-header">
         <div className="viewer-header__left">
-          <Link to="/objects" className="ghost">← 목록</Link>
+          <Link to="/objects" className="ghost" reloadDocument>← 목록</Link>
           <h2>{object.name}</h2>
         </div>
         <div className="viewer-header__actions">
@@ -136,7 +136,7 @@ export const Viewer = () => {
           >
             PDF 저장
           </button>
-          <Link to="/workflow" className="ghost">워크플로우</Link>
+          <Link to="/workflow" className="ghost" reloadDocument>워크플로우</Link>
         </div>
       </div>
 

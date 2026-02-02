@@ -7,9 +7,9 @@ export const Header = () => {
         <Link to="/">SIMVEX</Link>
       </div>
       <nav className="nav">
-        <NavLink to="/objects">오브젝트 목록</NavLink>
-        <NavLink to="/workflow">워크플로우</NavLink>
-        <NavLink to="/about">About</NavLink>
+        <NavLink to="/objects" reloadDocument>오브젝트 목록</NavLink>
+        <NavLink to="/workflow" reloadDocument>워크플로우</NavLink>
+        <NavLink to="/about" reloadDocument>About</NavLink>
       </nav>
     </header>
   )
