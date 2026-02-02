@@ -49,4 +49,4 @@ jobs:
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          ssh "$SSH_USER@$SSH_HOST" "sudo docker system prune -af && cd ~/simvex && printf 'OPENAI_API_KEY=%s\nOPENAI_MODEL=%s\nDATABASE_URL=%s\n' \"$OPENAI_API_KEY\" \"$OPENAI_MODEL\" \"$DATABASE_URL\" > .env && sudo docker compose up -d --build --no-deps backend"
+          ssh "$SSH_USER@$SSH_HOST" "sudo flock -w 300 /var/lock/simvex-docker-prune.lock -c 'docker system prune -af' && cd ~/simvex && printf 'OPENAI_API_KEY=%s\nOPENAI_MODEL=%s\nDATABASE_URL=%s\n' \"$OPENAI_API_KEY\" \"$OPENAI_MODEL\" \"$DATABASE_URL\" > .env && sudo docker compose up -d --build --no-deps backend"
