@@ -27,14 +27,14 @@ type Props = {
     zoom: number
   }) => void
   onCanvasReady?: (canvas: HTMLCanvasElement) => void
-  onCaptureReady?: (capture: () => Promise<PdfImageData | null>) => void
+  onCaptureReady?: (capture: () => PdfImageData | null) => void
 }
 
 const CaptureBridge = ({
   onCaptureReady,
   partsGroupRef,
 }: {
-  onCaptureReady?: (capture: () => Promise<PdfImageData | null>) => void
+  onCaptureReady?: (capture: () => PdfImageData | null) => void
   partsGroupRef: RefObject<Group | null>
 }) => {
   const { gl, scene, camera } = useThree()
@@ -43,7 +43,7 @@ const CaptureBridge = ({
   useEffect(() => {
     if (!onCaptureReady) return
 
-    onCaptureReady(async () => {
+    onCaptureReady(() => {
       const group = partsGroupRef.current
       if (!group) return null
 

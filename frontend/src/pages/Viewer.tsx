@@ -25,7 +25,7 @@ export const Viewer = () => {
   const [aiLoading, setAiLoading] = useState(false)
   const { exportPdf, isExporting } = usePdfExport()
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
-  const [captureImage, setCaptureImage] = useState<(() => Promise<PdfImageData | null>) | null>(
+  const [captureImage, setCaptureImage] = useState<(() => PdfImageData | null) | null>(
     null,
   )
 

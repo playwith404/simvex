@@ -96,9 +96,9 @@ const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 export const usePdfExport = () => {
   const [isExporting, setIsExporting] = useState(false)
 
-  const exportPdf = async (options: {
+  const exportPdf = (options: {
     canvas?: HTMLCanvasElement | null
-    getImageData?: () => Promise<PdfImageData | null>
+    getImageData?: () => PdfImageData | null
     objectName: string
     notes: string
     chatHistory: ChatMessage[]
@@ -109,7 +109,7 @@ export const usePdfExport = () => {
     try {
       const pdf = new jsPDF('p', 'mm', 'a4')
       const payload =
-        (await options.getImageData?.()) ??
+        options.getImageData?.() ??
         (options.canvas
           ? {
               dataUrl: options.canvas.toDataURL('image/png'),
