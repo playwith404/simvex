@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, Environment } from '@react-three/drei'
-import { Box3, Vector3, Group } from 'three'
+import { Box3, Vector3, Group, PerspectiveCamera } from 'three'
 import type { Part } from '../../types'
 import type { PdfImageData } from '../../types/pdf'
 import { PartMesh } from './PartMesh'
@@ -35,7 +35,7 @@ const CaptureBridge = ({
   partsGroupRef,
 }: {
   onCaptureReady?: (capture: () => Promise<PdfImageData | null>) => void
-  partsGroupRef: RefObject<Group>
+  partsGroupRef: RefObject<Group | null>
 }) => {
   const { gl, scene, camera } = useThree()
   const controls = useThree((state) => state.controls) as any
@@ -65,6 +65,14 @@ const CaptureBridge = ({
       const prevNear = camera.near
       const prevFar = camera.far
       const prevTarget = controls?.target?.clone()
+
+      if (!(camera instanceof PerspectiveCamera)) {
+        return {
+          dataUrl: gl.domElement.toDataURL('image/png'),
+          width: gl.domElement.width,
+          height: gl.domElement.height,
+        }
+      }
 
       const fov = (camera.fov * Math.PI) / 180
       const aspect = camera.aspect || gl.domElement.width / gl.domElement.height
@@ -138,7 +146,7 @@ export const ThreeScene = ({
         : [defaultCamera.x, defaultCamera.y, defaultCamera.z],
     [viewState],
   )
-  const partsGroupRef = useRef<Group>(null)
+  const partsGroupRef = useRef<Group | null>(null)
 
   return (
     <Canvas
