@@ -127,6 +127,9 @@ export const Viewer = () => {
                 objectName: object.name,
                 notes,
                 chatHistory: aiHistory,
+                onSaved: () => {
+                  window.focus()
+                },
               })
             }
             disabled={isExporting}

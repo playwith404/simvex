@@ -102,6 +102,7 @@ export const usePdfExport = () => {
     objectName: string
     notes: string
     chatHistory: ChatMessage[]
+    onSaved?: () => void
   }) => {
     if (!options.canvas && !options.getImageData) return
     setIsExporting(true)
@@ -166,8 +167,9 @@ export const usePdfExport = () => {
       }
 
       pdf.save(`simvex-${options.objectName}.pdf`)
+      options.onSaved?.()
     } finally {
-      setIsExporting(false)
+      setTimeout(() => setIsExporting(false), 0)
     }
   }
 
