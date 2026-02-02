@@ -46,4 +46,4 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          ssh "$SSH_USER@$SSH_HOST" "cd ~/simvex && sudo docker compose up -d --build --no-deps frontend"
+          ssh "$SSH_USER@$SSH_HOST" "sudo docker system prune -af && cd ~/simvex && sudo docker compose up -d --build --no-deps frontend"
