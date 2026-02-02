@@ -24,6 +24,7 @@ type Props = {
     cameraTarget: { x: number; y: number; z: number }
     zoom: number
   }) => void
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void
 }
 
 export const ThreeScene = ({
@@ -35,6 +36,7 @@ export const ThreeScene = ({
   onHoverPart,
   viewState,
   onViewStateChange,
+  onCanvasReady,
 }: Props) => {
   const cameraPosition = useMemo<[number, number, number]>(
     () =>
@@ -45,7 +47,13 @@ export const ThreeScene = ({
   )
 
   return (
-    <Canvas camera={{ position: cameraPosition, fov: 45 }}>
+    <Canvas
+      camera={{ position: cameraPosition, fov: 45 }}
+      gl={{ preserveDrawingBuffer: true, antialias: true }}
+      onCreated={({ gl }) => {
+        onCanvasReady?.(gl.domElement)
+      }}
+    >
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 8, 6]} intensity={0.9} />
       <directionalLight position={[-5, -2, -3]} intensity={0.4} />

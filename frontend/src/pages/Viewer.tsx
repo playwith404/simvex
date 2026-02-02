@@ -23,6 +23,7 @@ export const Viewer = () => {
   const [viewState, setViewState] = useState<StoredData['viewState'] | undefined>(undefined)
   const [aiLoading, setAiLoading] = useState(false)
   const { exportPdf, isExporting } = usePdfExport()
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     if (!objectId) return
@@ -117,7 +118,7 @@ export const Viewer = () => {
             className="ghost"
             onClick={() =>
               exportPdf({
-                canvas: document.querySelector('canvas'),
+                canvas: canvasEl,
                 objectName: object.name,
                 notes,
                 chatHistory: aiHistory,
@@ -142,6 +143,7 @@ export const Viewer = () => {
             onHoverPart={setHoveredPartId}
             viewState={viewState}
             onViewStateChange={(state) => setViewState({ ...state, decompositionLevel })}
+            onCanvasReady={setCanvasEl}
           />
           <div className="viewer-controls">
             <DecomposeSlider value={decompositionLevel} onChange={setDecompositionLevel} />
