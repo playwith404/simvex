@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - simvex-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - GIN_MODE=release
+      - PORT=8080
+      - DATABASE_URL=postgres://simvex:simvex@db:5432/simvex?sslmode=disable
+    volumes:
+      - ./backend/assets:/app/assets:ro
+    networks:
+      - simvex-network
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=simvex
+      - POSTGRES_USER=simvex
+      - POSTGRES_PASSWORD=simvex
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - simvex-network
+    restart: unless-stopped
+
+networks:
+  simvex-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

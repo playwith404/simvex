@@ -1,0 +1,273 @@
+package repository
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"simvex/internal/models"
+)
+
+type PostgresRepository struct {
+	db *sql.DB
+}
+
+func NewPostgresRepository(dsn string) (*PostgresRepository, error) {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	repo := &PostgresRepository{db: db}
+	if err := repo.migrate(); err != nil {
+		return nil, err
+	}
+	if err := repo.seedIfEmpty(); err != nil {
+		return nil, err
+	}
+
+	return repo, nil
+}
+
+func (r *PostgresRepository) Close() error {
+	return r.db.Close()
+}
+
+func (r *PostgresRepository) migrate() error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS objects (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT,
+			thumbnail TEXT,
+			model_path TEXT,
+			theory TEXT,
+			category TEXT,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS parts (
+			id TEXT PRIMARY KEY,
+			object_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			material TEXT,
+			role TEXT,
+			model_path TEXT,
+			local_pos_x DOUBLE PRECISION DEFAULT 0,
+			local_pos_y DOUBLE PRECISION DEFAULT 0,
+			local_pos_z DOUBLE PRECISION DEFAULT 0,
+			decompose_dir_x DOUBLE PRECISION DEFAULT 0,
+			decompose_dir_y DOUBLE PRECISION DEFAULT 1,
+			decompose_dir_z DOUBLE PRECISION DEFAULT 0,
+			decompose_distance DOUBLE PRECISION DEFAULT 1,
+			FOREIGN KEY (object_id) REFERENCES objects(id)
+		);`,
+	}
+
+	for _, q := range queries {
+		if _, err := r.db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *PostgresRepository) seedIfEmpty() error {
+	row := r.db.QueryRow("SELECT COUNT(1) FROM objects")
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	objects := []models.Object{
+		{
+			ID:          "engine-v4",
+			Name:        "V4 엔진",
+			Description: "자동차용 4기통 엔진의 내부 구조를 학습합니다.",
+			Thumbnail:   "/assets/models/engine-v4/thumbnail.png",
+			ModelPath:   "/assets/models/engine-v4/piston.glb",
+			Theory:      "열역학, 4행정 사이클, 피스톤 왕복운동과 크랭크 회전운동 변환",
+			Category:    "Powertrain",
+			CreatedAt:   time.Now(),
+		},
+		{
+			ID:          "suspension",
+			Name:        "서스펜션",
+			Description: "차량 현가장치의 스프링-댐퍼 구조를 학습합니다.",
+			Thumbnail:   "/assets/models/suspension/thumbnail.png",
+			ModelPath:   "/assets/models/suspension/base.glb",
+			Theory:      "진동, 감쇠, 하중 분산",
+			Category:    "Chassis",
+			CreatedAt:   time.Now(),
+		},
+		{
+			ID:          "robot-arm",
+			Name:        "로봇 암",
+			Description: "산업용 로봇 팔의 링크 구조와 회전축을 학습합니다.",
+			Thumbnail:   "/assets/models/robot-arm/thumbnail.png",
+			ModelPath:   "/assets/models/robot-arm/base.glb",
+			Theory:      "강체 운동학, 관절 회전, 토크 전달",
+			Category:    "Robotics",
+			CreatedAt:   time.Now(),
+		},
+		{
+			ID:          "machine-vice",
+			Name:        "공작 바이스",
+			Description: "공작물 고정 장치의 스핀들 구동과 죠 구조를 학습합니다.",
+			Thumbnail:   "/assets/models/machine-vice/thumbnail.png",
+			ModelPath:   "/assets/models/machine-vice/part1.glb",
+			Theory:      "나사 구동, 마찰, 고정력 전달",
+			Category:    "Manufacturing",
+			CreatedAt:   time.Now(),
+		},
+	}
+
+	parts := []models.Part{
+		// Engine V4
+		{id("engine-v4", "piston"), "engine-v4", "피스톤", "알루미늄 합금", "연소 압력을 받아 왕복운동을 수행", "/assets/models/engine-v4/piston.glb", 0, 0, 0, 0, 1, 0, 1.2},
+		{id("engine-v4", "piston-ring"), "engine-v4", "피스톤 링", "강재", "실린더 내부 기밀 유지", "/assets/models/engine-v4/piston-ring.glb", 0, 0, 0, 0, 1, 0, 1.4},
+		{id("engine-v4", "piston-pin"), "engine-v4", "피스톤 핀", "강재", "피스톤과 커넥팅 로드를 연결", "/assets/models/engine-v4/piston-pin.glb", 0, 0, 0, 1, 0, 0, 1.0},
+		{id("engine-v4", "connecting-rod"), "engine-v4", "커넥팅 로드", "단조강", "피스톤의 운동을 크랭크축에 전달", "/assets/models/engine-v4/connecting-rod.glb", 0, 0, 0, 0, -1, 0, 1.3},
+		{id("engine-v4", "connecting-rod-cap"), "engine-v4", "커넥팅 로드 캡", "단조강", "커넥팅 로드와 크랭크축 결합", "/assets/models/engine-v4/connecting-rod-cap.glb", 0, 0, 0, 0, -1, 0, 1.1},
+		{id("engine-v4", "conrod-bolt"), "engine-v4", "콘로드 볼트", "강재", "커넥팅 로드 체결", "/assets/models/engine-v4/conrod-bolt.glb", 0, 0, 0, 1, 0, 0, 1.0},
+		{id("engine-v4", "crankshaft"), "engine-v4", "크랭크축", "단조강", "왕복운동을 회전운동으로 변환", "/assets/models/engine-v4/crankshaft.glb", 0, 0, 0, 0, 0, 1, 1.5},
+
+		// Suspension
+		{id("suspension", "base"), "suspension", "베이스", "강재", "하중을 지지하는 본체", "/assets/models/suspension/base.glb", 0, 0, 0, 0, -1, 0, 0.9},
+		{id("suspension", "rod"), "suspension", "로드", "강재", "스프링과 베이스 연결", "/assets/models/suspension/rod.glb", 0, 0, 0, 0, 1, 0, 1.0},
+		{id("suspension", "spring"), "suspension", "스프링", "스프링강", "충격 흡수 및 복원력 제공", "/assets/models/suspension/spring.glb", 0, 0, 0, 0, 1, 0, 1.2},
+		{id("suspension", "nut"), "suspension", "너트", "강재", "체결 고정", "/assets/models/suspension/nut.glb", 0, 0, 0, 1, 0, 0, 0.7},
+		{id("suspension", "cap"), "suspension", "상단 캡", "강재", "상부 체결 및 보호", "/assets/models/suspension/nit.glb", 0, 0, 0, 0, 1, 0, 0.7},
+
+		// Robot Arm
+		{id("robot-arm", "base"), "robot-arm", "베이스", "알루미늄", "하부 지지 및 회전축", "/assets/models/robot-arm/base.glb", 0, 0, 0, 0, -1, 0, 1.0},
+		{id("robot-arm", "link-1"), "robot-arm", "링크 1", "알루미늄", "첫 번째 링크", "/assets/models/robot-arm/part2.glb", 0, 0, 0, 1, 0, 0, 1.2},
+		{id("robot-arm", "link-2"), "robot-arm", "링크 2", "알루미늄", "두 번째 링크", "/assets/models/robot-arm/part3.glb", 0, 0, 0, -1, 0, 0, 1.2},
+		{id("robot-arm", "joint-1"), "robot-arm", "관절 1", "합금강", "회전 관절", "/assets/models/robot-arm/part4.glb", 0, 0, 0, 0, 1, 0, 0.9},
+		{id("robot-arm", "joint-2"), "robot-arm", "관절 2", "합금강", "회전 관절", "/assets/models/robot-arm/part5.glb", 0, 0, 0, 0, 1, 0, 0.9},
+		{id("robot-arm", "link-3"), "robot-arm", "링크 3", "알루미늄", "세 번째 링크", "/assets/models/robot-arm/part6.glb", 0, 0, 0, 0, 0, 1, 1.1},
+		{id("robot-arm", "link-4"), "robot-arm", "링크 4", "알루미늄", "말단 링크", "/assets/models/robot-arm/part7.glb", 0, 0, 0, 0, 0, 1, 1.1},
+		{id("robot-arm", "end-effector"), "robot-arm", "엔드 이펙터", "알루미늄", "작업 도구 장착부", "/assets/models/robot-arm/part8.glb", 0, 0, 0, 0, 1, 0, 1.0},
+
+		// Machine Vice
+		{id("machine-vice", "body"), "machine-vice", "본체", "주강", "바이스 본체", "/assets/models/machine-vice/part1.glb", 0, 0, 0, 0, -1, 0, 1.1},
+		{id("machine-vice", "guide"), "machine-vice", "가이드", "주강", "죠 이동 가이드", "/assets/models/machine-vice/part1-fuhrung.glb", 0, 0, 0, 1, 0, 0, 0.9},
+		{id("machine-vice", "fixed-jaw"), "machine-vice", "고정 죠", "합금강", "고정 측 죠", "/assets/models/machine-vice/part2-feste-backe.glb", 0, 0, 0, 0, 1, 0, 1.0},
+		{id("machine-vice", "movable-jaw"), "machine-vice", "이동 죠", "합금강", "가동 측 죠", "/assets/models/machine-vice/part3-lose-backe.glb", 0, 0, 0, 0, 1, 0, 1.0},
+		{id("machine-vice", "spindle-base"), "machine-vice", "스핀들 베이스", "강재", "스핀들 지지", "/assets/models/machine-vice/part4-spindelsockel.glb", 0, 0, 0, 0, 0, 1, 1.0},
+		{id("machine-vice", "clamp-jaw"), "machine-vice", "클램프 죠", "합금강", "클램핑 압력 전달", "/assets/models/machine-vice/part5-spannbacke.glb", 0, 0, 0, 1, 0, 0, 1.0},
+		{id("machine-vice", "guide-rail"), "machine-vice", "가이드 레일", "강재", "가동부 이동 레일", "/assets/models/machine-vice/part6-fuhrungschiene.glb", 0, 0, 0, 1, 0, 0, 1.0},
+		{id("machine-vice", "spindle"), "machine-vice", "트라페조이드 스핀들", "강재", "나사 구동부", "/assets/models/machine-vice/part7-trapezspindel.glb", 0, 0, 0, 0, 0, 1, 1.2},
+		{id("machine-vice", "base-plate"), "machine-vice", "베이스 플레이트", "주강", "하부 지지", "/assets/models/machine-vice/part8-grundplatte.glb", 0, 0, 0, 0, -1, 0, 1.1},
+		{id("machine-vice", "pressure-sleeve"), "machine-vice", "프레셔 슬리브", "강재", "압력 전달", "/assets/models/machine-vice/part9-druckhulse.glb", 0, 0, 0, 0, 1, 0, 0.9},
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	objStmt, err := tx.Prepare(`INSERT INTO objects (id, name, description, thumbnail, model_path, theory, category, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer objStmt.Close()
+
+	for _, obj := range objects {
+		if _, err := objStmt.Exec(obj.ID, obj.Name, obj.Description, obj.Thumbnail, obj.ModelPath, obj.Theory, obj.Category, obj.CreatedAt); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	partStmt, err := tx.Prepare(`INSERT INTO parts (id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer partStmt.Close()
+
+	for _, part := range parts {
+		if _, err := partStmt.Exec(part.ID, part.ObjectID, part.Name, part.Material, part.Role, part.ModelPath, part.LocalPosX, part.LocalPosY, part.LocalPosZ, part.DecomposeDirX, part.DecomposeDirY, part.DecomposeDirZ, part.DecomposeDistance); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func rollback(tx *sql.Tx, err error) error {
+	if rbErr := tx.Rollback(); rbErr != nil {
+		return fmt.Errorf("rollback error: %w (original: %v)", rbErr, err)
+	}
+	return err
+}
+
+func id(objectID, part string) string {
+	return fmt.Sprintf("%s_%s", objectID, part)
+}
+
+func (r *PostgresRepository) GetObjects() ([]models.Object, error) {
+	rows, err := r.db.Query(`SELECT id, name, description, thumbnail, model_path, theory, category, created_at FROM objects ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var objects []models.Object
+	for rows.Next() {
+		var obj models.Object
+		if err := rows.Scan(&obj.ID, &obj.Name, &obj.Description, &obj.Thumbnail, &obj.ModelPath, &obj.Theory, &obj.Category, &obj.CreatedAt); err != nil {
+			return nil, err
+		}
+		objects = append(objects, obj)
+	}
+	return objects, nil
+}
+
+func (r *PostgresRepository) GetObjectByID(id string) (*models.Object, error) {
+	row := r.db.QueryRow(`SELECT id, name, description, thumbnail, model_path, theory, category, created_at FROM objects WHERE id = $1`, id)
+	var obj models.Object
+	if err := row.Scan(&obj.ID, &obj.Name, &obj.Description, &obj.Thumbnail, &obj.ModelPath, &obj.Theory, &obj.Category, &obj.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &obj, nil
+}
+
+func (r *PostgresRepository) GetPartsByObjectID(objectID string) ([]models.Part, error) {
+	rows, err := r.db.Query(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance FROM parts WHERE object_id = $1`, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var parts []models.Part
+	for rows.Next() {
+		var part models.Part
+		if err := rows.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance); err != nil {
+			return nil, err
+		}
+		parts = append(parts, part)
+	}
+	return parts, nil
+}
+
+func (r *PostgresRepository) GetPartByID(partID string) (*models.Part, error) {
+	row := r.db.QueryRow(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance FROM parts WHERE id = $1`, partID)
+	var part models.Part
+	if err := row.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &part, nil
+}

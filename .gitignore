@@ -1,0 +1,28 @@
+## dependencies
+node_modules/
+
+## build
+frontend/dist/
+
+## env
+.env
+.env.*
+
+## logs
+*.log
+
+## OS / editor
+.DS_Store
+Thumbs.db
+
+## local data
+backend/data/
+
+## 3D assets (exclude from git)
+backend/assets/models/
+backend/assets/**/*.glb
+backend/assets/**/*.gltf
+backend/assets/**/*.bin
+backend/assets/**/*.png
+backend/assets/**/*.jpg
+backend/assets/**/*.jpeg
