@@ -166,7 +166,17 @@ export const usePdfExport = () => {
         pdf.addImage(textImg, 'PNG', marginX, textY, textWidth, textHeight)
       }
 
-      pdf.save(`simvex-${options.objectName}.pdf`)
+      const filename = `simvex-${options.objectName}.pdf`
+      const blob = pdf.output('blob')
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.rel = 'noopener'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
       options.onSaved?.()
     } finally {
       setTimeout(() => setIsExporting(false), 0)
