@@ -6,6 +6,7 @@ import { DecomposeSlider } from '../components/ui/DecomposeSlider'
 import { fetchObject, fetchParts, sendChat } from '../services/api'
 import { loadState, saveState } from '../services/storage'
 import { usePdfExport } from '../hooks/usePdfExport'
+import type { PdfImageData } from '../types/pdf'
 import type { ChatMessage, ObjectModel, Part, StoredData } from '../types'
 
 export const Viewer = () => {
@@ -24,6 +25,9 @@ export const Viewer = () => {
   const [aiLoading, setAiLoading] = useState(false)
   const { exportPdf, isExporting } = usePdfExport()
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
+  const [captureImage, setCaptureImage] = useState<(() => Promise<PdfImageData | null>) | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!objectId) return
@@ -119,6 +123,7 @@ export const Viewer = () => {
             onClick={() =>
               exportPdf({
                 canvas: canvasEl,
+                getImageData: captureImage ?? undefined,
                 objectName: object.name,
                 notes,
                 chatHistory: aiHistory,
@@ -144,6 +149,7 @@ export const Viewer = () => {
             viewState={viewState}
             onViewStateChange={(state) => setViewState({ ...state, decompositionLevel })}
             onCanvasReady={setCanvasEl}
+            onCaptureReady={setCaptureImage}
           />
           <div className="viewer-controls">
             <DecomposeSlider value={decompositionLevel} onChange={setDecompositionLevel} />

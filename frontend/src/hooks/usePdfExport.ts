@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import jsPDF from 'jspdf'
 import type { ChatMessage } from '../types'
+import type { PdfImageData } from '../types/pdf'
 
 type TextSection = {
   title: string
@@ -96,24 +97,34 @@ export const usePdfExport = () => {
   const [isExporting, setIsExporting] = useState(false)
 
   const exportPdf = async (options: {
-    canvas: HTMLCanvasElement | null
+    canvas?: HTMLCanvasElement | null
+    getImageData?: () => Promise<PdfImageData | null>
     objectName: string
     notes: string
     chatHistory: ChatMessage[]
   }) => {
-    if (!options.canvas) return
+    if (!options.canvas && !options.getImageData) return
     setIsExporting(true)
 
     try {
       const pdf = new jsPDF('p', 'mm', 'a4')
-      const imgData = options.canvas.toDataURL('image/png')
+      const payload =
+        (await options.getImageData?.()) ??
+        (options.canvas
+          ? {
+              dataUrl: options.canvas.toDataURL('image/png'),
+              width: options.canvas.width,
+              height: options.canvas.height,
+            }
+          : null)
+      if (!payload) return
       const pageWidth = 210
       const pageHeight = 297
       const marginX = 10
       const marginTop = 12
       const maxImgWidth = pageWidth - marginX * 2
       const maxImgHeight = pageHeight - marginTop * 2
-      const aspect = options.canvas.width / options.canvas.height
+      const aspect = payload.width / payload.height
       let imgWidth = maxImgWidth
       let imgHeight = imgWidth / aspect
       if (imgHeight > maxImgHeight) {
@@ -122,7 +133,7 @@ export const usePdfExport = () => {
       }
       const imgX = marginX + (maxImgWidth - imgWidth) / 2
 
-      pdf.addImage(imgData, 'PNG', imgX, marginTop, imgWidth, imgHeight)
+      pdf.addImage(payload.dataUrl, 'PNG', imgX, marginTop, imgWidth, imgHeight)
 
       const summary = options.chatHistory
         .slice(-6)
