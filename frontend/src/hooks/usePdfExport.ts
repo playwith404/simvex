@@ -172,7 +172,8 @@ export const usePdfExport = () => {
       const link = document.createElement('a')
       link.href = url
       link.download = filename
-      link.rel = 'noopener'
+      link.rel = 'noopener noreferrer'
+      link.target = '_blank'
       document.body.appendChild(link)
       link.click()
       link.remove()
