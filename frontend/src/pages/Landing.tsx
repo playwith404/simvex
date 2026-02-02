@@ -17,15 +17,14 @@ export const Landing = () => {
         </div>
         <div className="landing__hero-visual">
           <div className="hero-orb" />
-          <div className="hero-card">
-            <h3>SIMVEX 3D View</h3>
-            <p>분해/조립, 부품 선택, 실시간 학습 노트</p>
-            <div className="hero-card__badge">3D 렌더링</div>
-          </div>
         </div>
       </div>
 
       <div className="landing__features">
+        <div className="feature">
+          <h4>SIMVEX 3D View</h4>
+          <p>분해/조립, 부품 선택, 실시간 학습 노트</p>
+        </div>
         <div className="feature">
           <h4>3D 분해</h4>
           <p>부품별 분해 방향으로 구조를 단계적으로 학습합니다.</p>
