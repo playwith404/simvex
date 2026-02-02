@@ -167,17 +167,13 @@ export const usePdfExport = () => {
       }
 
       const filename = `simvex-${options.objectName}.pdf`
-      const blob = pdf.output('blob')
-      const url = URL.createObjectURL(blob)
+      const dataUrl = pdf.output('datauristring')
       const link = document.createElement('a')
-      link.href = url
+      link.href = dataUrl
       link.download = filename
-      link.rel = 'noopener noreferrer'
-      link.target = '_blank'
       document.body.appendChild(link)
       link.click()
       link.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
       options.onSaved?.()
     } finally {
       setTimeout(() => setIsExporting(false), 0)
