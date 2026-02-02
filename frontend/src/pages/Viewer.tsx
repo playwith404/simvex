@@ -149,7 +149,7 @@ export const Viewer = () => {
             viewState={viewState}
             onViewStateChange={(state) => setViewState({ ...state, decompositionLevel })}
             onCanvasReady={setCanvasEl}
-            onCaptureReady={setCaptureImage}
+            onCaptureReady={(capture) => setCaptureImage(() => capture)}
           />
           <div className="viewer-controls">
             <DecomposeSlider value={decompositionLevel} onChange={setDecompositionLevel} />
