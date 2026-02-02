@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { Landing } from './pages/Landing'
 import { ObjectList } from './pages/ObjectList'
@@ -7,9 +7,11 @@ import { Workflow } from './pages/Workflow'
 import { About } from './pages/About'
 
 const App = () => {
+  const location = useLocation()
+
   return (
     <Layout>
-      <Routes>
+      <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Landing />} />
         <Route path="/objects" element={<ObjectList />} />
         <Route path="/viewer/:objectId" element={<Viewer />} />
