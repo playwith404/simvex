@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"simvex/internal/api"
+	"simvex/internal/api/handlers"
 	"simvex/internal/api/middleware"
 	"simvex/internal/repository"
 	"simvex/internal/services"
@@ -50,6 +51,7 @@ func main() {
 	openaiClient := openaisvc.NewClient(apiKey, model)
 	objectService := services.NewObjectService(repo)
 	aiService := services.NewAIService(repo, openaiClient)
+	assetService := services.NewAssetService(repo)
 
 	router := gin.Default()
 	allowedOrigins := []string{"https://simvex.com", "http://localhost:5173"}
@@ -58,7 +60,17 @@ func main() {
 	}
 	router.Use(middleware.CORS(allowedOrigins))
 
-	router.Static("/assets", "./assets")
+	assetPath := os.Getenv("ASSET_IMPORT_PATH")
+	if assetPath == "" {
+		assetPath = "./assets/models"
+	}
+	if err := repo.SeedAssetsFromDir(assetPath); err != nil {
+		log.Printf("asset seed failed: %v", err)
+	}
+
+	assetHandler := handlers.NewAssetHandler(assetService)
+	router.GET("/assets/models/*filepath", assetHandler.GetAsset)
+	router.HEAD("/assets/models/*filepath", assetHandler.GetAsset)
 
 	api.RegisterRoutes(router, objectService, aiService)
 

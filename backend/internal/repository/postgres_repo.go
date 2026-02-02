@@ -4,6 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -65,6 +71,12 @@ func (r *PostgresRepository) migrate() error {
 			decompose_dir_z DOUBLE PRECISION DEFAULT 0,
 			decompose_distance DOUBLE PRECISION DEFAULT 1,
 			FOREIGN KEY (object_id) REFERENCES objects(id)
+		);`,
+		`CREATE TABLE IF NOT EXISTS assets (
+			path TEXT PRIMARY KEY,
+			content_type TEXT NOT NULL,
+			data BYTEA NOT NULL,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
 	}
 
@@ -201,6 +213,71 @@ func (r *PostgresRepository) seedIfEmpty() error {
 	return tx.Commit()
 }
 
+func (r *PostgresRepository) SeedAssetsFromDir(basePath string) error {
+	if basePath == "" {
+		return nil
+	}
+	if _, err := os.Stat(basePath); err != nil {
+		return nil
+	}
+
+	row := r.db.QueryRow("SELECT COUNT(1) FROM assets")
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`INSERT INTO assets (path, content_type, data, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (path) DO NOTHING`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer stmt.Close()
+
+	walkErr := filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if !isAssetExt(ext) {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(basePath, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		webPath := "/assets/models/" + rel
+		contentType := contentTypeForExt(ext, data)
+
+		if _, err := stmt.Exec(webPath, contentType, data); err != nil {
+			return err
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return rollback(tx, walkErr)
+	}
+
+	return tx.Commit()
+}
+
 func rollback(tx *sql.Tx, err error) error {
 	if rbErr := tx.Rollback(); rbErr != nil {
 		return fmt.Errorf("rollback error: %w (original: %v)", rbErr, err)
@@ -270,4 +347,46 @@ func (r *PostgresRepository) GetPartByID(partID string) (*models.Part, error) {
 		return nil, err
 	}
 	return &part, nil
+}
+
+func (r *PostgresRepository) GetAssetByPath(path string) (*models.Asset, error) {
+	row := r.db.QueryRow(`SELECT path, content_type, data FROM assets WHERE path = $1`, path)
+	var asset models.Asset
+	if err := row.Scan(&asset.Path, &asset.ContentType, &asset.Data); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func isAssetExt(ext string) bool {
+	switch ext {
+	case ".glb", ".gltf", ".bin", ".png", ".jpg", ".jpeg":
+		return true
+	default:
+		return false
+	}
+}
+
+func contentTypeForExt(ext string, data []byte) string {
+	switch ext {
+	case ".glb":
+		return "model/gltf-binary"
+	case ".gltf":
+		return "model/gltf+json"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	default:
+		if detected := mime.TypeByExtension(ext); detected != "" {
+			return detected
+		}
+		if len(data) > 0 {
+			return http.DetectContentType(data)
+		}
+		return "application/octet-stream"
+	}
 }

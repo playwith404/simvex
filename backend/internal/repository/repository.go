@@ -8,4 +8,5 @@ type Repository interface {
 	GetObjectByID(id string) (*models.Object, error)
 	GetPartsByObjectID(objectID string) ([]models.Part, error)
 	GetPartByID(partID string) (*models.Part, error)
+	GetAssetByPath(path string) (*models.Asset, error)
 }

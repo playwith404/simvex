@@ -1,0 +1,56 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-cicd.yml'
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install rsync
+        run: sudo apt-get update -y && sudo apt-get install -y rsync
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync backend
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude 'backend/data' \
+            --exclude '.git' \
+            ./backend/ "$SSH_USER@$SSH_HOST:~/simvex/backend/"
+          rsync -az docker-compose.yml "$SSH_USER@$SSH_HOST:~/simvex/docker-compose.yml"
+
+      - name: Write env and deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          ssh "$SSH_USER@$SSH_HOST" "cd ~/simvex && cat > .env <<'EOT'
+OPENAI_API_KEY=${OPENAI_API_KEY}
+OPENAI_MODEL=${OPENAI_MODEL}
+DATABASE_URL=${DATABASE_URL}
+EOT
+sudo docker compose up -d --build --no-deps backend"
