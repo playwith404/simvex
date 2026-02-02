@@ -36,6 +36,7 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude 'backend/data' \
+            --exclude 'backend/assets' \
             --exclude '.git' \
             ./backend/ "$SSH_USER@$SSH_HOST:~/simvex/backend/"
           rsync -az docker-compose.yml "$SSH_USER@$SSH_HOST:~/simvex/docker-compose.yml"
