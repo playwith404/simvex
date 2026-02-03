@@ -12,6 +12,7 @@ import 'reactflow/dist/style.css'
 import { EditableNode } from '../components/ui/EditableNode'
 import {
   createProject,
+  deleteProject,
   getWorkflowFull,
   listProjects,
   notionConnect,
@@ -36,6 +37,8 @@ export const Workflow = () => {
   const [projects, setProjects] = useState<WorkflowProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [isHydrating, setIsHydrating] = useState(false)
+  const [hasLoadedProject, setHasLoadedProject] = useState(false)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [notionConnected, setNotionConnected] = useState(false)
   const [notionToken, setNotionToken] = useState('')
@@ -128,6 +131,8 @@ export const Workflow = () => {
     if (!activeProjectId) return
     let alive = true
     const fetchFull = async () => {
+      setHasLoadedProject(false)
+      setIsHydrating(true)
       const full = await getWorkflowFull(activeProjectId)
       if (!alive) return
       const mappedNodes: Node[] = full.nodes.map((n) => ({
@@ -150,10 +155,14 @@ export const Workflow = () => {
       }))
       setNodes(mappedNodes)
       setEdges(mappedEdges)
+      setHasLoadedProject(true)
+      setIsHydrating(false)
     }
     fetchFull().catch(() => {
       setNodes([])
       setEdges([])
+      setHasLoadedProject(false)
+      setIsHydrating(false)
     })
     return () => {
       alive = false
@@ -205,6 +214,17 @@ export const Workflow = () => {
     setActiveProjectId(project.id)
   }
 
+  const handleDeleteProject = async () => {
+    if (!activeProjectId) return
+    const target = projects.find((p) => p.id === activeProjectId)
+    const ok = window.confirm(`프로젝트 "${target?.title ?? ''}"를 삭제할까요?`)
+    if (!ok) return
+    await deleteProject(activeProjectId)
+    const next = projects.filter((p) => p.id !== activeProjectId)
+    setProjects(next)
+    setActiveProjectId(next[0]?.id ?? '')
+  }
+
   const handleConnectNotion = async () => {
     if (!notionToken.trim()) return
     try {
@@ -227,6 +247,7 @@ export const Workflow = () => {
 
   useEffect(() => {
     if (!activeProjectId) return
+    if (!hasLoadedProject || isHydrating) return
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current)
     }
@@ -276,6 +297,47 @@ export const Workflow = () => {
     }
   }, [activeProjectId, edges, nodes])
 
+  const handleSaveNow = async () => {
+    if (!activeProjectId) return
+    const today = new Date().toISOString().slice(0, 10)
+    const payloadNodes: WorkflowNode[] = nodes.map((n) => ({
+      id: n.id,
+      projectId: activeProjectId,
+      title: String(n.data?.label ?? '새 노드'),
+      scheduledDate: today,
+      progress: 0,
+      positionX: n.position.x,
+      positionY: n.position.y,
+    }))
+    const payloadEdges = edges.map((e) => ({
+      id: e.id,
+      projectId: activeProjectId,
+      source: e.source,
+      target: e.target,
+    }))
+    const attachments: WorkflowAttachment[] = []
+    nodes.forEach((n) => {
+      const list = (n.data?.attachments || []) as WorkflowAttachment[]
+      list.forEach((a) => {
+        const id = a.id || makeId()
+        attachments.push({ ...a, id, nodeId: n.id })
+      })
+    })
+    const checklists: WorkflowChecklist[] = []
+    try {
+      setSaveStatus('저장 중...')
+      await saveWorkflowFull(activeProjectId, {
+        nodes: payloadNodes,
+        edges: payloadEdges,
+        checklists,
+        attachments,
+      })
+      setSaveStatus('저장됨')
+    } catch {
+      setSaveStatus('저장 실패')
+    }
+  }
+
   const headerButtons = useMemo(
     () => (
       <div className="workflow-actions">
@@ -307,6 +369,7 @@ export const Workflow = () => {
               ))}
             </select>
             <button type="button" className="ghost" onClick={handleCreateProject}>프로젝트 추가</button>
+            <button type="button" className="ghost" onClick={handleDeleteProject} disabled={!activeProjectId}>프로젝트 삭제</button>
           </div>
           <div className="workflow-notion">
             {notionConnected ? (
@@ -327,6 +390,7 @@ export const Workflow = () => {
             )}
           </div>
           {headerButtons}
+          <button type="button" onClick={handleSaveNow}>저장</button>
         </div>
       </div>
       <div className="workflow-canvas">

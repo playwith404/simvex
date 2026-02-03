@@ -493,6 +493,7 @@ button.ghost {
 .workflow-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .workflow-projects {
