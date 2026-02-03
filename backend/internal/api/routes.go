@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"simvex/internal/api/handlers"
 	"simvex/internal/api/middleware"
 	"simvex/internal/services"
@@ -14,6 +15,7 @@ func RegisterRoutes(
 	objectService *services.ObjectService,
 	aiService *services.AIService,
 	authService *services.AuthService,
+	redisClient *redis.Client,
 	cookieName string,
 	cookieSecure bool,
 ) {
@@ -35,6 +37,7 @@ func RegisterRoutes(
 		api.POST("/auth/logout", authHandler.Logout)
 		api.POST("/auth/password/reset-request", authHandler.RequestReset)
 		api.POST("/auth/password/reset-confirm", authHandler.ConfirmReset)
+		api.GET("/auth/me", middleware.AuthMiddleware(redisClient, cookieName), authHandler.Me)
 
 		api.GET("/objects", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.ListObjects)
 		api.GET("/objects/:id", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetObject)

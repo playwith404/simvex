@@ -101,3 +101,13 @@ export const confirmPasswordReset = async (payload: {
   })
   return handle<{ message: string }>(res)
 }
+
+export const getMe = async (): Promise<{ id: string; email: string } | null> => {
+  try {
+    const res = await fetchJson(`${API_BASE}/auth/me`, { method: 'GET' })
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
+}

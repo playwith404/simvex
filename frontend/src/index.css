@@ -82,6 +82,22 @@ textarea {
   color: #fff;
 }
 
+.nav-logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.nav-logout-btn:hover {
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .app-main {
   flex: 1;
   padding: 40px 48px 80px;

@@ -153,3 +153,20 @@ func (h *AuthHandler) ConfirmReset(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "password_updated"})
 }
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
+		return
+	}
+	user, err := h.service.GetUserByID(c.Request.Context(), userID.(string))
+	if err != nil || user == nil {
+		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":    user.ID,
+		"email": user.Email,
+	})
+}

@@ -122,7 +122,7 @@ func main() {
 	}
 	cookieSecure := strings.TrimSpace(os.Getenv("COOKIE_SECURE")) == "true"
 
-	api.RegisterRoutes(router, objectService, aiService, authService, cookieName, cookieSecure)
+	api.RegisterRoutes(router, objectService, aiService, authService, redisClient, cookieName, cookieSecure)
 
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("failed to start server: %v", err)

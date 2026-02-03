@@ -9,24 +9,28 @@ import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Verify } from './pages/Verify'
 import { ResetPassword } from './pages/ResetPassword'
+import { AuthProvider } from './contexts/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
 
 const App = () => {
   const location = useLocation()
 
   return (
-    <Layout>
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify" element={<Verify />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/objects" element={<ObjectList />} />
-        <Route path="/viewer/:objectId" element={<Viewer />} />
-        <Route path="/workflow" element={<Workflow />} />
-        <Route path="/about" element={<About />} />
-      </Routes>
-    </Layout>
+    <AuthProvider>
+      <Layout>
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify" element={<Verify />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/objects" element={<ProtectedRoute><ObjectList /></ProtectedRoute>} />
+          <Route path="/viewer/:objectId" element={<ProtectedRoute><Viewer /></ProtectedRoute>} />
+          <Route path="/workflow" element={<ProtectedRoute><Workflow /></ProtectedRoute>} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </Layout>
+    </AuthProvider>
   )
 }
 
