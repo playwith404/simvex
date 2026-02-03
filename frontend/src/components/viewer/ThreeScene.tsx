@@ -151,7 +151,9 @@ export const ThreeScene = ({
   return (
     <Canvas
       camera={{ position: cameraPosition, fov: 45 }}
-      gl={{ preserveDrawingBuffer: true, antialias: true }}
+      // Cap DPR to reduce GPU memory pressure (helps prevent Chrome "Aw, Snap" tab crashes on heavy WebGL scenes).
+      dpr={[1, 1.5]}
+      gl={{ preserveDrawingBuffer: true, antialias: false, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         onCanvasReady?.(gl.domElement)
       }}
