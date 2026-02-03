@@ -149,7 +149,7 @@ func (r *PostgresRepository) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_workflow_projects_user_id ON workflow_projects(user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_nodes_project_id ON workflow_nodes(project_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_edges_project_id ON workflow_edges(project_id);`,
-		`CREATE INDEX IF NOT EXISTS idx_notes_user_part ON notes(user_id, part_id);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_user_part_unique ON notes(user_id, part_id);`,
 	}
 
 	for _, q := range queries {
@@ -517,4 +517,318 @@ func (r *PostgresRepository) SetUserVerified(id string) error {
 func (r *PostgresRepository) UpdateUserPassword(id, passwordHash string) error {
 	_, err := r.db.Exec(`UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, id)
 	return err
+}
+
+func (r *PostgresRepository) CreateProject(userID, title string) (*models.WorkflowProject, error) {
+	row := r.db.QueryRow(
+		`INSERT INTO workflow_projects (user_id, title, created_at, updated_at)
+		 VALUES ($1, $2, NOW(), NOW())
+		 RETURNING id, user_id, title, notion_page_id, created_at, updated_at`,
+		userID, title,
+	)
+	var project models.WorkflowProject
+	if err := row.Scan(&project.ID, &project.UserID, &project.Title, &project.NotionPageID, &project.CreatedAt, &project.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+func (r *PostgresRepository) ListProjects(userID string) ([]models.WorkflowProject, error) {
+	rows, err := r.db.Query(
+		`SELECT id, user_id, title, notion_page_id, created_at, updated_at
+		 FROM workflow_projects WHERE user_id = $1 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var projects []models.WorkflowProject
+	for rows.Next() {
+		var p models.WorkflowProject
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Title, &p.NotionPageID, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, nil
+}
+
+func (r *PostgresRepository) GetProject(userID, projectID string) (*models.WorkflowProject, error) {
+	row := r.db.QueryRow(
+		`SELECT id, user_id, title, notion_page_id, created_at, updated_at
+		 FROM workflow_projects WHERE user_id = $1 AND id = $2`,
+		userID, projectID,
+	)
+	var p models.WorkflowProject
+	if err := row.Scan(&p.ID, &p.UserID, &p.Title, &p.NotionPageID, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *PostgresRepository) UpdateProject(userID, projectID, title string) (*models.WorkflowProject, error) {
+	row := r.db.QueryRow(
+		`UPDATE workflow_projects
+		 SET title = $1, updated_at = NOW()
+		 WHERE user_id = $2 AND id = $3
+		 RETURNING id, user_id, title, notion_page_id, created_at, updated_at`,
+		title, userID, projectID,
+	)
+	var p models.WorkflowProject
+	if err := row.Scan(&p.ID, &p.UserID, &p.Title, &p.NotionPageID, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *PostgresRepository) DeleteProject(userID, projectID string) error {
+	_, err := r.db.Exec(`DELETE FROM workflow_projects WHERE user_id = $1 AND id = $2`, userID, projectID)
+	return err
+}
+
+func (r *PostgresRepository) SaveWorkflowFull(userID, projectID string, nodes []models.WorkflowNode, edges []models.WorkflowEdge, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment) error {
+	project, err := r.GetProject(userID, projectID)
+	if err != nil {
+		return err
+	}
+	if project == nil {
+		return sql.ErrNoRows
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM workflow_edges WHERE project_id = $1`, projectID); err != nil {
+		return rollback(tx, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM workflow_nodes WHERE project_id = $1`, projectID); err != nil {
+		return rollback(tx, err)
+	}
+
+	nodeStmt, err := tx.Prepare(`INSERT INTO workflow_nodes
+		(id, project_id, title, description, scheduled_date, progress, color, position_x, position_y, linked_part_id, linked_note_id, notion_page_id, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer nodeStmt.Close()
+
+	for _, n := range nodes {
+		if n.ID == "" {
+			return rollback(tx, fmt.Errorf("node id is required"))
+		}
+		if n.ScheduledDate == "" {
+			return rollback(tx, fmt.Errorf("scheduledDate is required"))
+		}
+		dateVal, err := time.Parse("2006-01-02", n.ScheduledDate)
+		if err != nil {
+			return rollback(tx, err)
+		}
+		if _, err := nodeStmt.Exec(
+			n.ID, projectID, n.Title, n.Description, dateVal, n.Progress, n.Color,
+			n.PositionX, n.PositionY, nullableText(n.LinkedPartID), nullableText(n.LinkedNoteID), nullableText(n.NotionPageID),
+		); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	edgeStmt, err := tx.Prepare(`INSERT INTO workflow_edges (id, project_id, source_node_id, target_node_id) VALUES ($1,$2,$3,$4)`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer edgeStmt.Close()
+	for _, e := range edges {
+		if e.ID == "" {
+			return rollback(tx, fmt.Errorf("edge id is required"))
+		}
+		if _, err := edgeStmt.Exec(e.ID, projectID, e.SourceID, e.TargetID); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	checkStmt, err := tx.Prepare(`INSERT INTO node_checklists (id, node_id, text, done) VALUES ($1,$2,$3,$4)`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer checkStmt.Close()
+	for _, c := range checklists {
+		if c.ID == "" {
+			return rollback(tx, fmt.Errorf("checklist id is required"))
+		}
+		if _, err := checkStmt.Exec(c.ID, c.NodeID, c.Text, c.Done); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	attStmt, err := tx.Prepare(`INSERT INTO node_attachments (id, node_id, type, name, url, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	defer attStmt.Close()
+	for _, a := range attachments {
+		if a.ID == "" {
+			return rollback(tx, fmt.Errorf("attachment id is required"))
+		}
+		if _, err := attStmt.Exec(a.ID, a.NodeID, a.Type, a.Name, a.URL); err != nil {
+			return rollback(tx, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *PostgresRepository) LoadWorkflowFull(userID, projectID string) ([]models.WorkflowNode, []models.WorkflowEdge, []models.WorkflowChecklist, []models.WorkflowAttachment, error) {
+	project, err := r.GetProject(userID, projectID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if project == nil {
+		return nil, nil, nil, nil, sql.ErrNoRows
+	}
+
+	nodes := []models.WorkflowNode{}
+	nodeRows, err := r.db.Query(
+		`SELECT id, project_id, title, description, scheduled_date, progress, color, position_x, position_y, linked_part_id, linked_note_id, notion_page_id, created_at, updated_at
+		 FROM workflow_nodes WHERE project_id = $1`,
+		projectID,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer nodeRows.Close()
+	for nodeRows.Next() {
+		var n models.WorkflowNode
+		var dateVal time.Time
+		if err := nodeRows.Scan(&n.ID, &n.ProjectID, &n.Title, &n.Description, &dateVal, &n.Progress, &n.Color, &n.PositionX, &n.PositionY, &n.LinkedPartID, &n.LinkedNoteID, &n.NotionPageID, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, nil, nil, nil, err
+		}
+		n.ScheduledDate = dateVal.Format("2006-01-02")
+		nodes = append(nodes, n)
+	}
+
+	edges := []models.WorkflowEdge{}
+	edgeRows, err := r.db.Query(`SELECT id, project_id, source_node_id, target_node_id FROM workflow_edges WHERE project_id = $1`, projectID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer edgeRows.Close()
+	for edgeRows.Next() {
+		var e models.WorkflowEdge
+		if err := edgeRows.Scan(&e.ID, &e.ProjectID, &e.SourceID, &e.TargetID); err != nil {
+			return nil, nil, nil, nil, err
+		}
+		edges = append(edges, e)
+	}
+
+	checklists := []models.WorkflowChecklist{}
+	checkRows, err := r.db.Query(
+		`SELECT id, node_id, text, done FROM node_checklists WHERE node_id IN (SELECT id FROM workflow_nodes WHERE project_id = $1)`,
+		projectID,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer checkRows.Close()
+	for checkRows.Next() {
+		var c models.WorkflowChecklist
+		if err := checkRows.Scan(&c.ID, &c.NodeID, &c.Text, &c.Done); err != nil {
+			return nil, nil, nil, nil, err
+		}
+		checklists = append(checklists, c)
+	}
+
+	attachments := []models.WorkflowAttachment{}
+	attRows, err := r.db.Query(
+		`SELECT id, node_id, type, name, url FROM node_attachments WHERE node_id IN (SELECT id FROM workflow_nodes WHERE project_id = $1)`,
+		projectID,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer attRows.Close()
+	for attRows.Next() {
+		var a models.WorkflowAttachment
+		if err := attRows.Scan(&a.ID, &a.NodeID, &a.Type, &a.Name, &a.URL); err != nil {
+			return nil, nil, nil, nil, err
+		}
+		attachments = append(attachments, a)
+	}
+
+	return nodes, edges, checklists, attachments, nil
+}
+
+func (r *PostgresRepository) GetNoteByPart(userID, partID string) (*models.Note, error) {
+	row := r.db.QueryRow(
+		`SELECT id, user_id, part_id, content, notion_page_id, created_at, updated_at
+		 FROM notes WHERE user_id = $1 AND part_id = $2`,
+		userID, partID,
+	)
+	var n models.Note
+	if err := row.Scan(&n.ID, &n.UserID, &n.PartID, &n.Content, &n.NotionPageID, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (r *PostgresRepository) UpsertNote(userID, partID, content string) (*models.Note, error) {
+	row := r.db.QueryRow(
+		`INSERT INTO notes (user_id, part_id, content, created_at, updated_at)
+		 VALUES ($1, $2, $3, NOW(), NOW())
+		 ON CONFLICT (user_id, part_id)
+		 DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
+		 RETURNING id, user_id, part_id, content, notion_page_id, created_at, updated_at`,
+		userID, partID, content,
+	)
+	var n models.Note
+	if err := row.Scan(&n.ID, &n.UserID, &n.PartID, &n.Content, &n.NotionPageID, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (r *PostgresRepository) SetNotionToken(userID, tokenEncrypted string) error {
+	_, err := r.db.Exec(
+		`INSERT INTO notion_tokens (user_id, token_encrypted, created_at)
+		 VALUES ($1, $2, NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET token_encrypted = EXCLUDED.token_encrypted, created_at = NOW()`,
+		userID, tokenEncrypted,
+	)
+	return err
+}
+
+func (r *PostgresRepository) GetNotionToken(userID string) (string, error) {
+	row := r.db.QueryRow(`SELECT token_encrypted FROM notion_tokens WHERE user_id = $1`, userID)
+	var token string
+	if err := row.Scan(&token); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return token, nil
+}
+
+func (r *PostgresRepository) DeleteNotionToken(userID string) error {
+	_, err := r.db.Exec(`DELETE FROM notion_tokens WHERE user_id = $1`, userID)
+	return err
+}
+
+func nullableText(value string) interface{} {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }

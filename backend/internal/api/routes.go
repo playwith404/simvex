@@ -15,6 +15,9 @@ func RegisterRoutes(
 	objectService *services.ObjectService,
 	aiService *services.AIService,
 	authService *services.AuthService,
+	workflowService *services.WorkflowService,
+	noteService *services.NoteService,
+	notionService *services.NotionService,
 	redisClient *redis.Client,
 	cookieName string,
 	cookieSecure bool,
@@ -23,6 +26,9 @@ func RegisterRoutes(
 	partHandler := handlers.NewPartHandler(objectService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	authHandler := handlers.NewAuthHandler(authService, cookieName, cookieSecure)
+	workflowHandler := handlers.NewWorkflowHandler(workflowService)
+	noteHandler := handlers.NewNoteHandler(noteService)
+	notionHandler := handlers.NewNotionHandler(notionService)
 
 	objectLimiter := middleware.NewRateLimiter(100, time.Minute)
 	aiLimiter := middleware.NewRateLimiter(20, time.Minute)
@@ -46,5 +52,23 @@ func RegisterRoutes(
 		api.GET("/parts/:partId", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), partHandler.GetPart)
 
 		api.POST("/ai/chat", aiLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), aiHandler.Chat)
+
+		protected := api.Group("/")
+		protected.Use(middleware.AuthMiddleware(redisClient, cookieName))
+
+		protected.GET("/workflow/projects", workflowHandler.ListProjects)
+		protected.POST("/workflow/projects", workflowHandler.CreateProject)
+		protected.PUT("/workflow/projects/:id", workflowHandler.UpdateProject)
+		protected.DELETE("/workflow/projects/:id", workflowHandler.DeleteProject)
+		protected.GET("/workflow/projects/:id/full", workflowHandler.GetFull)
+		protected.PUT("/workflow/projects/:id/full", workflowHandler.SaveFull)
+
+		protected.GET("/parts/:id/note", noteHandler.GetNote)
+		protected.PUT("/parts/:id/note", noteHandler.UpsertNote)
+
+		protected.POST("/notion/connect", notionHandler.Connect)
+		protected.GET("/notion/status", notionHandler.Status)
+		protected.DELETE("/notion/disconnect", notionHandler.Disconnect)
+		protected.POST("/notion/sync", notionHandler.Sync)
 	}
 }

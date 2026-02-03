@@ -1,4 +1,14 @@
-import type { ObjectModel, Part, ChatMessage } from '../types'
+import type {
+  ObjectModel,
+  Part,
+  ChatMessage,
+  WorkflowProject,
+  WorkflowFull,
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowChecklist,
+  WorkflowAttachment,
+} from '../types'
 
 const API_BASE = '/api'
 
@@ -99,6 +109,76 @@ export const confirmPasswordReset = async (payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+  return handle<{ message: string }>(res)
+}
+
+export const listProjects = async (): Promise<WorkflowProject[]> => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects`, { method: 'GET' })
+  return handle<WorkflowProject[]>(res)
+}
+
+export const createProject = async (title: string): Promise<WorkflowProject> => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects`, {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  })
+  return handle<WorkflowProject>(res)
+}
+
+export const updateProject = async (id: string, title: string): Promise<WorkflowProject> => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ title }),
+  })
+  return handle<WorkflowProject>(res)
+}
+
+export const deleteProject = async (id: string) => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects/${id}`, { method: 'DELETE' })
+  return handle<{ message: string }>(res)
+}
+
+export const getWorkflowFull = async (projectId: string): Promise<WorkflowFull> => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects/${projectId}/full`, { method: 'GET' })
+  return handle<WorkflowFull>(res)
+}
+
+export const saveWorkflowFull = async (
+  projectId: string,
+  payload: {
+    nodes: WorkflowNode[]
+    edges: WorkflowEdge[]
+    checklists: WorkflowChecklist[]
+    attachments: WorkflowAttachment[]
+  },
+) => {
+  const res = await fetchJson(`${API_BASE}/workflow/projects/${projectId}/full`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+  return handle<{ message: string }>(res)
+}
+
+export const notionStatus = async (): Promise<{ connected: boolean }> => {
+  const res = await fetchJson(`${API_BASE}/notion/status`, { method: 'GET' })
+  return handle<{ connected: boolean }>(res)
+}
+
+export const notionConnect = async (token: string) => {
+  const res = await fetchJson(`${API_BASE}/notion/connect`, {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+  return handle<{ message: string }>(res)
+}
+
+export const notionDisconnect = async () => {
+  const res = await fetchJson(`${API_BASE}/notion/disconnect`, { method: 'DELETE' })
+  return handle<{ message: string }>(res)
+}
+
+export const notionSync = async () => {
+  const res = await fetchJson(`${API_BASE}/notion/sync`, { method: 'POST' })
   return handle<{ message: string }>(res)
 }
 

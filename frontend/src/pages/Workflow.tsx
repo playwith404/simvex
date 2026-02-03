@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   addEdge,
   Background,
@@ -10,48 +10,36 @@ import ReactFlow, {
 import type { Connection, Edge, Node } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { EditableNode } from '../components/ui/EditableNode'
+import {
+  createProject,
+  getWorkflowFull,
+  listProjects,
+  notionConnect,
+  notionDisconnect,
+  notionStatus,
+  notionSync,
+  saveWorkflowFull,
+} from '../services/api'
+import type {
+  WorkflowAttachment,
+  WorkflowChecklist,
+  WorkflowNode,
+  WorkflowProject,
+} from '../types'
 
-const STORAGE_KEY = 'simvex:workflow'
-
-const defaultNodes: Node[] = [
-  {
-    id: '1',
-    position: { x: 80, y: 80 },
-    data: { label: '학습 목표\n- 구조 이해하기', attachments: [] },
-    type: 'editable',
-  },
-  {
-    id: '2',
-    position: { x: 380, y: 200 },
-    data: { label: '부품 분석\n- 핵심 부품 선택', attachments: [] },
-    type: 'editable',
-  },
-  {
-    id: '3',
-    position: { x: 680, y: 320 },
-    data: { label: '퀴즈 정리\n- 노트 정리', attachments: [] },
-    type: 'editable',
-  },
-]
-
-const defaultEdges: Edge[] = [
-  {
-    id: 'e1-2',
-    source: '1',
-    target: '2',
-    markerEnd: { type: MarkerType.ArrowClosed },
-  },
-  {
-    id: 'e2-3',
-    source: '2',
-    target: '3',
-    markerEnd: { type: MarkerType.ArrowClosed },
-  },
-]
+const emptyNodes: Node[] = []
+const emptyEdges: Edge[] = []
 
 export const Workflow = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState(emptyNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(emptyEdges)
+  const [projects, setProjects] = useState<WorkflowProject[]>([])
+  const [activeProjectId, setActiveProjectId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [notionConnected, setNotionConnected] = useState(false)
+  const [notionToken, setNotionToken] = useState('')
+  const saveTimer = useRef<number | null>(null)
 
   const handleNodeLabelChange = useCallback(
     (id: string, value: string) => {
@@ -103,42 +91,64 @@ export const Workflow = () => {
   )
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      const parsed = JSON.parse(saved) as { nodes: Node[]; edges: Edge[] }
-      setNodes(
-        parsed.nodes.map((node) => ({
-          ...node,
-          type: 'editable',
-          data: {
-            ...node.data,
-            attachments: node.data.attachments || [],
-            onChange: handleNodeLabelChange,
-            onAddAttachment: handleAddAttachment,
-            onRemoveAttachment: handleRemoveAttachment,
-          },
-        })),
-      )
-      setEdges(parsed.edges)
-    } else {
-      setNodes(
-        defaultNodes.map((node) => ({
-          ...node,
-          data: {
-            ...node.data,
-            onChange: handleNodeLabelChange,
-            onAddAttachment: handleAddAttachment,
-            onRemoveAttachment: handleRemoveAttachment,
-          },
-        })),
-      )
-      setEdges(defaultEdges)
+    let alive = true
+    const load = async () => {
+      try {
+        const [projectList, notionState] = await Promise.all([
+          listProjects(),
+          notionStatus().catch(() => ({ connected: false })),
+        ])
+        if (!alive) return
+        setProjects(projectList)
+        setNotionConnected(notionState.connected)
+        if (projectList.length > 0) {
+          setActiveProjectId(projectList[0].id)
+        }
+      } finally {
+        if (alive) setLoading(false)
+      }
     }
-  }, [setNodes, setEdges, handleNodeLabelChange, handleAddAttachment, handleRemoveAttachment])
+    load()
+    return () => {
+      alive = false
+    }
+  }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges }))
-  }, [nodes, edges])
+    if (!activeProjectId) return
+    let alive = true
+    const fetchFull = async () => {
+      const full = await getWorkflowFull(activeProjectId)
+      if (!alive) return
+      const mappedNodes: Node[] = full.nodes.map((n) => ({
+        id: n.id,
+        position: { x: n.positionX, y: n.positionY },
+        data: {
+          label: n.title || '새 노드',
+          attachments: full.attachments.filter((a) => a.nodeId === n.id),
+          onChange: handleNodeLabelChange,
+          onAddAttachment: handleAddAttachment,
+          onRemoveAttachment: handleRemoveAttachment,
+        },
+        type: 'editable',
+      }))
+      const mappedEdges: Edge[] = full.edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        markerEnd: { type: MarkerType.ArrowClosed },
+      }))
+      setNodes(mappedNodes)
+      setEdges(mappedEdges)
+    }
+    fetchFull().catch(() => {
+      setNodes([])
+      setEdges([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [activeProjectId, handleAddAttachment, handleNodeLabelChange, handleRemoveAttachment, setEdges, setNodes])
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
@@ -167,6 +177,81 @@ export const Workflow = () => {
     setEdges([])
   }
 
+  const handleCreateProject = async () => {
+    const title = window.prompt('새 프로젝트 제목을 입력하세요')
+    if (!title) return
+    const project = await createProject(title)
+    setProjects((prev) => [project, ...prev])
+    setActiveProjectId(project.id)
+  }
+
+  const handleConnectNotion = async () => {
+    if (!notionToken.trim()) return
+    await notionConnect(notionToken.trim())
+    setNotionToken('')
+    setNotionConnected(true)
+  }
+
+  const handleDisconnectNotion = async () => {
+    await notionDisconnect()
+    setNotionConnected(false)
+  }
+
+  const handleSyncNotion = async () => {
+    await notionSync()
+  }
+
+  useEffect(() => {
+    if (!activeProjectId) return
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+    }
+    saveTimer.current = window.setTimeout(async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const payloadNodes: WorkflowNode[] = nodes.map((n) => ({
+        id: n.id,
+        projectId: activeProjectId,
+        title: String(n.data?.label ?? '새 노드'),
+        scheduledDate: today,
+        progress: 0,
+        positionX: n.position.x,
+        positionY: n.position.y,
+      }))
+      const payloadEdges = edges.map((e) => ({
+        id: e.id,
+        projectId: activeProjectId,
+        source: e.source,
+        target: e.target,
+      }))
+      const attachments: WorkflowAttachment[] = []
+      nodes.forEach((n) => {
+        const list = (n.data?.attachments || []) as WorkflowAttachment[]
+        list.forEach((a) => {
+          const id = a.id || `att-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+          attachments.push({ ...a, id, nodeId: n.id })
+        })
+      })
+      const checklists: WorkflowChecklist[] = []
+      try {
+        setSaveStatus('저장 중...')
+        await saveWorkflowFull(activeProjectId, {
+          nodes: payloadNodes,
+          edges: payloadEdges,
+          checklists,
+          attachments,
+        })
+        setSaveStatus('저장됨')
+      } catch {
+        setSaveStatus('저장 실패')
+      }
+    }, 800)
+    return () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current)
+      }
+    }
+  }, [activeProjectId, edges, nodes])
+
   const headerButtons = useMemo(
     () => (
       <div className="workflow-actions">
@@ -183,8 +268,41 @@ export const Workflow = () => {
         <div>
           <h2>워크플로우 차트</h2>
           <p>학습 단계를 노드로 구성하고 연결하세요.</p>
+          {saveStatus && <p className="muted">{saveStatus}</p>}
         </div>
-        {headerButtons}
+        <div className="workflow-actions">
+          <div className="workflow-projects">
+            <select
+              value={activeProjectId}
+              onChange={(e) => setActiveProjectId(e.target.value)}
+              disabled={loading || projects.length === 0}
+            >
+              {projects.length === 0 && <option value="">프로젝트 없음</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+            <button type="button" className="ghost" onClick={handleCreateProject}>프로젝트 추가</button>
+          </div>
+          <div className="workflow-notion">
+            {notionConnected ? (
+              <>
+                <button type="button" onClick={handleSyncNotion}>Notion 동기화</button>
+                <button type="button" className="ghost" onClick={handleDisconnectNotion}>연결 해제</button>
+              </>
+            ) : (
+              <>
+                <input
+                  placeholder="Notion 토큰 입력"
+                  value={notionToken}
+                  onChange={(e) => setNotionToken(e.target.value)}
+                />
+                <button type="button" onClick={handleConnectNotion}>연결</button>
+              </>
+            )}
+          </div>
+          {headerButtons}
+        </div>
       </div>
       <div className="workflow-canvas">
         <ReactFlow

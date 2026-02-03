@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { NodeProps } from 'reactflow'
 
 export type Attachment = {
+  id: string
   type: 'file' | 'link'
   name: string
   url: string
@@ -16,6 +17,13 @@ type NodeData = {
 }
 
 const EditableNodeComponent = ({ id, data }: NodeProps<NodeData>) => {
+  const makeId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID()
+    }
+    return `att-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
+
   return (
     <div className="flow-node">
       <textarea
@@ -41,7 +49,7 @@ const EditableNodeComponent = ({ id, data }: NodeProps<NodeData>) => {
             const url = window.prompt('첨부할 링크 URL을 입력하세요')
             if (!url) return
             const name = window.prompt('표시 이름을 입력하세요') || '링크'
-            data.onAddAttachment(id, { type: 'link', name, url })
+            data.onAddAttachment(id, { id: makeId(), type: 'link', name, url })
           }}
         >
           링크 추가
@@ -56,7 +64,7 @@ const EditableNodeComponent = ({ id, data }: NodeProps<NodeData>) => {
               const reader = new FileReader()
               reader.onload = () => {
                 const url = String(reader.result)
-                data.onAddAttachment(id, { type: 'file', name: file.name, url })
+                data.onAddAttachment(id, { id: makeId(), type: 'file', name: file.name, url })
               }
               reader.readAsDataURL(file)
               e.currentTarget.value = ''

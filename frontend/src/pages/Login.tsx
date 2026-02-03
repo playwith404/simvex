@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 export const Login = () => {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,7 +17,8 @@ export const Login = () => {
     setError(null)
     try {
       await login({ email, password })
-      navigate('/objects')
+      await refresh()
+      navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : '로그인에 실패했습니다')
     } finally {

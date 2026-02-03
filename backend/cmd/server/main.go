@@ -96,6 +96,13 @@ func main() {
 	sessionTTL := 14 * 24 * time.Hour
 	codeTTL := 10 * time.Minute
 	authService := services.NewAuthService(repo, redisClient, mailer, sessionTTL, codeTTL)
+	workflowService := services.NewWorkflowService(repo)
+	noteService := services.NewNoteService(repo)
+	notionKey := strings.TrimSpace(os.Getenv("NOTION_TOKEN_KEY"))
+	notionService, err := services.NewNotionService(repo, notionKey)
+	if err != nil {
+		log.Fatalf("failed to init notion service: %v", err)
+	}
 
 	router := gin.Default()
 	allowedOrigins := []string{"https://simvex.com", "http://localhost:5173"}
@@ -122,7 +129,18 @@ func main() {
 	}
 	cookieSecure := strings.TrimSpace(os.Getenv("COOKIE_SECURE")) == "true"
 
-	api.RegisterRoutes(router, objectService, aiService, authService, redisClient, cookieName, cookieSecure)
+	api.RegisterRoutes(
+		router,
+		objectService,
+		aiService,
+		authService,
+		workflowService,
+		noteService,
+		notionService,
+		redisClient,
+		cookieName,
+		cookieSecure,
+	)
 
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("failed to start server: %v", err)

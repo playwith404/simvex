@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"simvex/internal/api/middleware"
 	"simvex/internal/services"
 )
 
@@ -155,18 +156,19 @@ func (h *AuthHandler) ConfirmReset(c *gin.Context) {
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
 		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
 		return
 	}
-	user, err := h.service.GetUserByID(c.Request.Context(), userID.(string))
-	if err != nil || user == nil {
-		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
+	user, err := h.service.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "USER_LOAD_FAILED", "사용자 정보를 불러오지 못했습니다", nil)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"id":    user.ID,
-		"email": user.Email,
-	})
+	if user == nil {
+		respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "사용자를 찾을 수 없습니다", nil)
+		return
+	}
+	c.JSON(http.StatusOK, user)
 }

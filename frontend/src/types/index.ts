@@ -45,3 +45,57 @@ export type StoredData = {
   aiHistory: ChatMessage[]
   lastUpdated: string
 }
+
+export type WorkflowProject = {
+  id: string
+  userId: string
+  title: string
+  notionPageId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type WorkflowNode = {
+  id: string
+  projectId: string
+  title: string
+  description?: string
+  scheduledDate: string
+  progress: number
+  color?: string
+  positionX: number
+  positionY: number
+  linkedPartId?: string
+  linkedNoteId?: string
+  notionPageId?: string
+}
+
+export type WorkflowEdge = {
+  id: string
+  projectId: string
+  source: string
+  target: string
+}
+
+export type WorkflowChecklist = {
+  id: string
+  nodeId: string
+  text: string
+  done: boolean
+}
+
+export type WorkflowAttachment = {
+  id: string
+  nodeId: string
+  type: 'link' | 'file'
+  name: string
+  url: string
+}
+
+export type WorkflowFull = {
+  project: WorkflowProject
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  checklists: WorkflowChecklist[]
+  attachments: WorkflowAttachment[]
+}
