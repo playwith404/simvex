@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ThreeScene } from '../components/viewer/ThreeScene'
 import { SidePanel } from '../components/ui/SidePanel'
 import { DecomposeSlider } from '../components/ui/DecomposeSlider'
-import { fetchObject, fetchParts, sendChat } from '../services/api'
+import { fetchObject, fetchParts, getPartNote, savePartNote, sendChat } from '../services/api'
 import { loadState, saveState } from '../services/storage'
 import { usePdfExport } from '../hooks/usePdfExport'
 import type { PdfImageData } from '../types/pdf'
@@ -19,6 +19,7 @@ export const Viewer = () => {
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null)
   const [decompositionLevel, setDecompositionLevel] = useState(0)
   const [notes, setNotes] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
   const [aiHistory, setAiHistory] = useState<ChatMessage[]>([])
   const [activeTab, setActiveTab] = useState<'note' | 'ai'>('note')
   const [viewState, setViewState] = useState<StoredData['viewState'] | undefined>(undefined)
@@ -40,9 +41,14 @@ export const Viewer = () => {
         if (saved) {
           setSelectedPartId(saved.selectedPart ?? null)
           setDecompositionLevel(saved.viewState?.decompositionLevel ?? 0)
-          setNotes(saved.notes)
           setAiHistory(saved.aiHistory ?? [])
           setViewState(saved.viewState)
+        }
+        return getPartNote(objectId).catch(() => null)
+      })
+      .then((note) => {
+        if (note?.content) {
+          setNotes(note.content)
         }
       })
       .catch((err) => setError(err.message))
@@ -169,6 +175,26 @@ export const Viewer = () => {
           onSendMessage={handleSendMessage}
           aiLoading={aiLoading}
         />
+        {activeTab === 'note' && (
+          <div className="note-save">
+            <button
+              type="button"
+              className="ghost"
+              disabled={!objectId || noteSaving}
+              onClick={async () => {
+                if (!objectId) return
+                setNoteSaving(true)
+                try {
+                  await savePartNote(objectId, notes)
+                } finally {
+                  setNoteSaving(false)
+                }
+              }}
+            >
+              저장
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

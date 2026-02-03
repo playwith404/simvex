@@ -351,7 +351,10 @@ export const Workflow = () => {
     setNoteLoading(true)
     getPartNote(objectId)
       .then((res) => {
-        if (alive) setNoteContent(res?.content ?? '')
+        if (!alive) return
+        if (res?.content) {
+          setNoteContent(res.content)
+        }
       })
       .finally(() => {
         if (alive) setNoteLoading(false)
@@ -532,25 +535,28 @@ export const Workflow = () => {
                 type="button"
                 className="ghost"
                 onClick={() => {
-                  if (!selectedEdge) return
-                  const reverse = edges.find(
-                    (e) => e.source === selectedEdge.target && e.target === selectedEdge.source,
-                  )
-                  if (reverse) {
-                    setEdges((eds) => eds.filter((e) => e.id !== reverse.id))
-                  } else {
+                  if (!selectedEdgeId) return
+                  setEdges((eds) => {
+                    const edge = eds.find((e) => e.id === selectedEdgeId)
+                    if (!edge) return eds
+                    const reverse = eds.find(
+                      (e) => e.source === edge.target && e.target === edge.source,
+                    )
+                    if (reverse) {
+                      return eds.filter((e) => e.id !== reverse.id)
+                    }
                     const id = makeId()
-                    setEdges((eds) => [
+                    return [
                       ...eds,
                       {
                         id,
-                        source: selectedEdge.target,
-                        target: selectedEdge.source,
+                        source: edge.target,
+                        target: edge.source,
                         markerEnd: { type: MarkerType.ArrowClosed, color: '#8fa3b8' },
                         style: { stroke: '#8fa3b8' },
                       },
-                    ])
-                  }
+                    ]
+                  })
                 }}
               >
                 양방향 토글

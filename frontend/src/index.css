@@ -430,6 +430,21 @@ button.ghost {
   outline: none;
 }
 
+.note-save {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.note-save button {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 .ai-chat {
   display: flex;
   flex-direction: column;
