@@ -63,8 +63,8 @@ func RegisterRoutes(
 		protected.GET("/workflow/projects/:id/full", workflowHandler.GetFull)
 		protected.PUT("/workflow/projects/:id/full", workflowHandler.SaveFull)
 
-		protected.GET("/parts/:id/note", noteHandler.GetNote)
-		protected.PUT("/parts/:id/note", noteHandler.UpsertNote)
+		protected.GET("/parts/:partId/note", noteHandler.GetNote)
+		protected.PUT("/parts/:partId/note", noteHandler.UpsertNote)
 
 		protected.POST("/notion/connect", notionHandler.Connect)
 		protected.GET("/notion/status", notionHandler.Status)

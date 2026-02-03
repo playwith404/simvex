@@ -26,7 +26,7 @@ func (h *NoteHandler) GetNote(c *gin.Context) {
 		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
 		return
 	}
-	partID := c.Param("id")
+	partID := c.Param("partId")
 	note, err := h.service.GetNote(c.Request.Context(), userID, partID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "NOTE_LOAD_FAILED", "노트 조회에 실패했습니다", nil)
@@ -45,7 +45,7 @@ func (h *NoteHandler) UpsertNote(c *gin.Context) {
 		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
 		return
 	}
-	partID := c.Param("id")
+	partID := c.Param("partId")
 	var req noteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "잘못된 요청입니다", nil)
