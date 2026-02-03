@@ -23,7 +23,9 @@ type Repository interface {
 	LoadWorkflowFull(userID, projectID string) ([]models.WorkflowNode, []models.WorkflowEdge, []models.WorkflowChecklist, []models.WorkflowAttachment, error)
 	GetNoteByPart(userID, partID string) (*models.Note, error)
 	UpsertNote(userID, partID, content string) (*models.Note, error)
-	SetNotionToken(userID, tokenEncrypted string) error
-	GetNotionToken(userID string) (string, error)
+	SetNotionToken(userID, tokenEncrypted, parentPageID string) error
+	GetNotionToken(userID string) (tokenEncrypted, parentPageID string, err error)
 	DeleteNotionToken(userID string) error
+	UpdateProjectNotionPageID(userID, projectID, notionPageID string) error
+	UpdateNodeNotionPageID(userID, projectID, nodeID, notionPageID string) error
 }

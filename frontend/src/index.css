@@ -532,6 +532,80 @@ button.ghost {
   overflow: hidden;
 }
 
+.workflow-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.workflow-detail {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  min-height: 520px;
+}
+
+.workflow-detail__card {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-detail__card h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.workflow-detail__card label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.workflow-detail__card input,
+.workflow-detail__card textarea,
+.workflow-detail__card select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+}
+
+.workflow-detail__card textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.workflow-detail__empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.workflow-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-checklist__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workflow-checklist__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.workflow-note textarea {
+  min-height: 120px;
+}
+
 .flow-node {
   background: var(--card);
   border: 1px solid var(--border);

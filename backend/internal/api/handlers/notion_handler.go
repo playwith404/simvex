@@ -17,7 +17,8 @@ func NewNotionHandler(service *services.NotionService) *NotionHandler {
 }
 
 type notionConnectRequest struct {
-	Token string `json:"token"`
+	Token        string `json:"token"`
+	ParentPageID string `json:"parentPageId"`
 }
 
 func (h *NotionHandler) Connect(c *gin.Context) {
@@ -31,7 +32,11 @@ func (h *NotionHandler) Connect(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "토큰이 필요합니다", nil)
 		return
 	}
-	if err := h.service.SetToken(c.Request.Context(), userID, req.Token); err != nil {
+	if req.ParentPageID == "" {
+		respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Parent Page ID가 필요합니다", nil)
+		return
+	}
+	if err := h.service.SetToken(c.Request.Context(), userID, req.Token, req.ParentPageID); err != nil {
 		respondError(c, http.StatusInternalServerError, "NOTION_CONNECT_FAILED", "Notion 연결에 실패했습니다", nil)
 		return
 	}
@@ -44,7 +49,7 @@ func (h *NotionHandler) Status(c *gin.Context) {
 		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
 		return
 	}
-	_, okToken, err := h.service.GetToken(c.Request.Context(), userID)
+	_, _, okToken, err := h.service.GetToken(c.Request.Context(), userID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "NOTION_STATUS_FAILED", "Notion 상태 조회에 실패했습니다", nil)
 		return
@@ -71,14 +76,9 @@ func (h *NotionHandler) Sync(c *gin.Context) {
 		respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "로그인이 필요합니다", nil)
 		return
 	}
-	_, okToken, err := h.service.GetToken(c.Request.Context(), userID)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "NOTION_SYNC_FAILED", "동기화에 실패했습니다", nil)
+	if err := h.service.SyncUser(c.Request.Context(), userID); err != nil {
+		respondError(c, http.StatusBadRequest, "NOTION_SYNC_FAILED", err.Error(), nil)
 		return
 	}
-	if !okToken {
-		respondError(c, http.StatusBadRequest, "NOTION_NOT_CONNECTED", "Notion 토큰이 필요합니다", nil)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "sync_started"})
+	c.JSON(http.StatusOK, gin.H{"message": "sync_completed"})
 }

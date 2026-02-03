@@ -164,10 +164,10 @@ export const notionStatus = async (): Promise<{ connected: boolean }> => {
   return handle<{ connected: boolean }>(res)
 }
 
-export const notionConnect = async (token: string) => {
+export const notionConnect = async (token: string, parentPageId: string) => {
   const res = await fetchJson(`${API_BASE}/notion/connect`, {
     method: 'POST',
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, parentPageId }),
   })
   return handle<{ message: string }>(res)
 }
@@ -189,4 +189,17 @@ export const getMe = async (): Promise<{ id: string; email: string } | null> => 
   } catch {
     return null
   }
+}
+
+export const getPartNote = async (partId: string) => {
+  const res = await fetchJson(`${API_BASE}/parts/${partId}/note`, { method: 'GET' })
+  return handle<{ content?: string }>(res)
+}
+
+export const savePartNote = async (partId: string, content: string) => {
+  const res = await fetchJson(`${API_BASE}/parts/${partId}/note`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  })
+  return handle<{ id: string; content: string }>(res)
 }

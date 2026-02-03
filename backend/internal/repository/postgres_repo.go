@@ -90,9 +90,14 @@ func (r *PostgresRepository) migrate() error {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			token_encrypted TEXT NOT NULL,
+			parent_page_id TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (user_id)
 		);`,
+		`DO $$ BEGIN
+			ALTER TABLE notion_tokens ADD COLUMN IF NOT EXISTS parent_page_id TEXT NOT NULL DEFAULT '';
+		EXCEPTION WHEN duplicate_column THEN NULL;
+		END $$;`,
 		`CREATE TABLE IF NOT EXISTS workflow_projects (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -800,26 +805,26 @@ func (r *PostgresRepository) UpsertNote(userID, partID, content string) (*models
 	return &n, nil
 }
 
-func (r *PostgresRepository) SetNotionToken(userID, tokenEncrypted string) error {
+func (r *PostgresRepository) SetNotionToken(userID, tokenEncrypted, parentPageID string) error {
 	_, err := r.db.Exec(
-		`INSERT INTO notion_tokens (user_id, token_encrypted, created_at)
-		 VALUES ($1, $2, NOW())
-		 ON CONFLICT (user_id) DO UPDATE SET token_encrypted = EXCLUDED.token_encrypted, created_at = NOW()`,
-		userID, tokenEncrypted,
+		`INSERT INTO notion_tokens (user_id, token_encrypted, parent_page_id, created_at)
+		 VALUES ($1, $2, $3, NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET token_encrypted = EXCLUDED.token_encrypted, parent_page_id = EXCLUDED.parent_page_id, created_at = NOW()`,
+		userID, tokenEncrypted, parentPageID,
 	)
 	return err
 }
 
-func (r *PostgresRepository) GetNotionToken(userID string) (string, error) {
-	row := r.db.QueryRow(`SELECT token_encrypted FROM notion_tokens WHERE user_id = $1`, userID)
-	var token string
-	if err := row.Scan(&token); err != nil {
+func (r *PostgresRepository) GetNotionToken(userID string) (string, string, error) {
+	row := r.db.QueryRow(`SELECT token_encrypted, COALESCE(parent_page_id, '') FROM notion_tokens WHERE user_id = $1`, userID)
+	var token, parentPageID string
+	if err := row.Scan(&token, &parentPageID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
+			return "", "", nil
 		}
-		return "", err
+		return "", "", err
 	}
-	return token, nil
+	return token, parentPageID, nil
 }
 
 func (r *PostgresRepository) DeleteNotionToken(userID string) error {
@@ -832,4 +837,26 @@ func nullableText(value string) interface{} {
 		return nil
 	}
 	return value
+}
+
+func (r *PostgresRepository) UpdateProjectNotionPageID(userID, projectID, notionPageID string) error {
+	_, err := r.db.Exec(
+		`UPDATE workflow_projects SET notion_page_id = $1, updated_at = NOW() WHERE user_id = $2 AND id = $3`,
+		notionPageID, userID, projectID,
+	)
+	return err
+}
+
+func (r *PostgresRepository) UpdateNodeNotionPageID(userID, projectID, nodeID, notionPageID string) error {
+	_, err := r.db.Exec(
+		`UPDATE workflow_nodes AS n
+		 SET notion_page_id = $1, updated_at = NOW()
+		 FROM workflow_projects AS p
+		 WHERE n.project_id = p.id
+		   AND p.user_id = $2
+		   AND n.project_id = $3
+		   AND n.id = $4`,
+		notionPageID, userID, projectID, nodeID,
+	)
+	return err
 }
