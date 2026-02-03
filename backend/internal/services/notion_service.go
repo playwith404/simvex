@@ -45,7 +45,7 @@ func (s *NotionService) SetToken(ctx context.Context, userID, token string) erro
 
 func (s *NotionService) GetToken(ctx context.Context, userID string) (string, bool, error) {
 	if s.key == nil {
-		return "", false, fmt.Errorf("notion token key not configured")
+		return "", false, nil
 	}
 	enc, err := s.repo.GetNotionToken(userID)
 	if err != nil {

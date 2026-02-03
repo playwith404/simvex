@@ -40,6 +40,12 @@ export const Workflow = () => {
   const [notionConnected, setNotionConnected] = useState(false)
   const [notionToken, setNotionToken] = useState('')
   const saveTimer = useRef<number | null>(null)
+  const makeId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID()
+    }
+    return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
 
   const handleNodeLabelChange = useCallback(
     (id: string, value: string) => {
@@ -155,12 +161,22 @@ export const Workflow = () => {
   }, [activeProjectId, handleAddAttachment, handleNodeLabelChange, handleRemoveAttachment, setEdges, setNodes])
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
+    (connection: Connection) =>
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            id: makeId(),
+            markerEnd: { type: MarkerType.ArrowClosed },
+          },
+          eds,
+        ),
+      ),
     [setEdges],
   )
 
   const addNode = () => {
-    const id = `node-${nodes.length + 1}`
+    const id = makeId()
     const newNode: Node = {
       id,
       position: { x: 120 + nodes.length * 40, y: 120 + nodes.length * 30 },
@@ -191,9 +207,13 @@ export const Workflow = () => {
 
   const handleConnectNotion = async () => {
     if (!notionToken.trim()) return
-    await notionConnect(notionToken.trim())
-    setNotionToken('')
-    setNotionConnected(true)
+    try {
+      await notionConnect(notionToken.trim())
+      setNotionToken('')
+      setNotionConnected(true)
+    } catch {
+      setNotionConnected(false)
+    }
   }
 
   const handleDisconnectNotion = async () => {
@@ -231,7 +251,7 @@ export const Workflow = () => {
       nodes.forEach((n) => {
         const list = (n.data?.attachments || []) as WorkflowAttachment[]
         list.forEach((a) => {
-          const id = a.id || `att-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+          const id = a.id || makeId()
           attachments.push({ ...a, id, nodeId: n.id })
         })
       })
@@ -300,6 +320,7 @@ export const Workflow = () => {
                   placeholder="Notion 토큰 입력"
                   value={notionToken}
                   onChange={(e) => setNotionToken(e.target.value)}
+                  type="password"
                 />
                 <button type="button" onClick={handleConnectNotion}>연결</button>
               </>

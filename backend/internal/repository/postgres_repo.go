@@ -523,7 +523,7 @@ func (r *PostgresRepository) CreateProject(userID, title string) (*models.Workfl
 	row := r.db.QueryRow(
 		`INSERT INTO workflow_projects (user_id, title, created_at, updated_at)
 		 VALUES ($1, $2, NOW(), NOW())
-		 RETURNING id, user_id, title, notion_page_id, created_at, updated_at`,
+		 RETURNING id, user_id, title, COALESCE(notion_page_id, ''), created_at, updated_at`,
 		userID, title,
 	)
 	var project models.WorkflowProject
@@ -535,7 +535,7 @@ func (r *PostgresRepository) CreateProject(userID, title string) (*models.Workfl
 
 func (r *PostgresRepository) ListProjects(userID string) ([]models.WorkflowProject, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, title, notion_page_id, created_at, updated_at
+		`SELECT id, user_id, title, COALESCE(notion_page_id, ''), created_at, updated_at
 		 FROM workflow_projects WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
 	)
@@ -557,7 +557,7 @@ func (r *PostgresRepository) ListProjects(userID string) ([]models.WorkflowProje
 
 func (r *PostgresRepository) GetProject(userID, projectID string) (*models.WorkflowProject, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, title, notion_page_id, created_at, updated_at
+		`SELECT id, user_id, title, COALESCE(notion_page_id, ''), created_at, updated_at
 		 FROM workflow_projects WHERE user_id = $1 AND id = $2`,
 		userID, projectID,
 	)
@@ -576,7 +576,7 @@ func (r *PostgresRepository) UpdateProject(userID, projectID, title string) (*mo
 		`UPDATE workflow_projects
 		 SET title = $1, updated_at = NOW()
 		 WHERE user_id = $2 AND id = $3
-		 RETURNING id, user_id, title, notion_page_id, created_at, updated_at`,
+		 RETURNING id, user_id, title, COALESCE(notion_page_id, ''), created_at, updated_at`,
 		title, userID, projectID,
 	)
 	var p models.WorkflowProject
@@ -698,7 +698,8 @@ func (r *PostgresRepository) LoadWorkflowFull(userID, projectID string) ([]model
 
 	nodes := []models.WorkflowNode{}
 	nodeRows, err := r.db.Query(
-		`SELECT id, project_id, title, description, scheduled_date, progress, color, position_x, position_y, linked_part_id, linked_note_id, notion_page_id, created_at, updated_at
+		`SELECT id, project_id, title, description, scheduled_date, progress, color, position_x, position_y,
+		        COALESCE(linked_part_id, ''), COALESCE(linked_note_id::text, ''), COALESCE(notion_page_id, ''), created_at, updated_at
 		 FROM workflow_nodes WHERE project_id = $1`,
 		projectID,
 	)
@@ -769,7 +770,7 @@ func (r *PostgresRepository) LoadWorkflowFull(userID, projectID string) ([]model
 
 func (r *PostgresRepository) GetNoteByPart(userID, partID string) (*models.Note, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, part_id, content, notion_page_id, created_at, updated_at
+		`SELECT id, user_id, part_id, content, COALESCE(notion_page_id, ''), created_at, updated_at
 		 FROM notes WHERE user_id = $1 AND part_id = $2`,
 		userID, partID,
 	)
@@ -789,7 +790,7 @@ func (r *PostgresRepository) UpsertNote(userID, partID, content string) (*models
 		 VALUES ($1, $2, $3, NOW(), NOW())
 		 ON CONFLICT (user_id, part_id)
 		 DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
-		 RETURNING id, user_id, part_id, content, notion_page_id, created_at, updated_at`,
+		 RETURNING id, user_id, part_id, content, COALESCE(notion_page_id, ''), created_at, updated_at`,
 		userID, partID, content,
 	)
 	var n models.Note
