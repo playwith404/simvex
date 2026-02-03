@@ -46,6 +46,7 @@ func (r *PostgresRepository) Close() error {
 
 func (r *PostgresRepository) migrate() error {
 	queries := []string{
+		`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`,
 		`CREATE TABLE IF NOT EXISTS objects (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -78,6 +79,77 @@ func (r *PostgresRepository) migrate() error {
 			data BYTEA NOT NULL,
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			email TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS notion_tokens (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_encrypted TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (user_id)
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_projects (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			title TEXT NOT NULL,
+			notion_page_id TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS notes (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			part_id TEXT NOT NULL,
+			content TEXT NOT NULL,
+			notion_page_id TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_nodes (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			project_id UUID NOT NULL REFERENCES workflow_projects(id) ON DELETE CASCADE,
+			title TEXT NOT NULL,
+			description TEXT,
+			scheduled_date DATE NOT NULL,
+			progress INTEGER NOT NULL DEFAULT 0,
+			color TEXT,
+			position_x DOUBLE PRECISION NOT NULL DEFAULT 0,
+			position_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+			linked_part_id TEXT,
+			linked_note_id UUID REFERENCES notes(id) ON DELETE SET NULL,
+			notion_page_id TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_edges (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			project_id UUID NOT NULL REFERENCES workflow_projects(id) ON DELETE CASCADE,
+			source_node_id UUID NOT NULL REFERENCES workflow_nodes(id) ON DELETE CASCADE,
+			target_node_id UUID NOT NULL REFERENCES workflow_nodes(id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS node_checklists (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			node_id UUID NOT NULL REFERENCES workflow_nodes(id) ON DELETE CASCADE,
+			text TEXT NOT NULL,
+			done BOOLEAN NOT NULL DEFAULT FALSE
+		);`,
+		`CREATE TABLE IF NOT EXISTS node_attachments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			node_id UUID NOT NULL REFERENCES workflow_nodes(id) ON DELETE CASCADE,
+			type TEXT NOT NULL CHECK (type IN ('link', 'file')),
+			name TEXT NOT NULL,
+			url TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_projects_user_id ON workflow_projects(user_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_nodes_project_id ON workflow_nodes(project_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_edges_project_id ON workflow_edges(project_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_notes_user_part ON notes(user_id, part_id);`,
 	}
 
 	for _, q := range queries {
@@ -389,4 +461,60 @@ func contentTypeForExt(ext string, data []byte) string {
 		}
 		return "application/octet-stream"
 	}
+}
+
+func (r *PostgresRepository) CreateUser(email, passwordHash string) (*models.User, error) {
+	row := r.db.QueryRow(
+		`INSERT INTO users (email, password_hash, is_verified, created_at)
+		 VALUES ($1, $2, FALSE, NOW())
+		 RETURNING id, email, password_hash, is_verified, created_at`,
+		email,
+		passwordHash,
+	)
+
+	var user models.User
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.IsVerified, &user.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) {
+	row := r.db.QueryRow(
+		`SELECT id, email, password_hash, is_verified, created_at FROM users WHERE email = $1`,
+		email,
+	)
+	var user models.User
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.IsVerified, &user.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
+	row := r.db.QueryRow(
+		`SELECT id, email, password_hash, is_verified, created_at FROM users WHERE id = $1`,
+		id,
+	)
+	var user models.User
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.IsVerified, &user.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *PostgresRepository) SetUserVerified(id string) error {
+	_, err := r.db.Exec(`UPDATE users SET is_verified = TRUE WHERE id = $1`, id)
+	return err
+}
+
+func (r *PostgresRepository) UpdateUserPassword(id, passwordHash string) error {
+	_, err := r.db.Exec(`UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, id)
+	return err
 }

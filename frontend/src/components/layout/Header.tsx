@@ -10,6 +10,7 @@ export const Header = () => {
         <NavLink to="/objects" reloadDocument>오브젝트 목록</NavLink>
         <NavLink to="/workflow" reloadDocument>워크플로우</NavLink>
         <NavLink to="/about" reloadDocument>About</NavLink>
+        <NavLink to="/login" reloadDocument>로그인</NavLink>
       </nav>
     </header>
   )

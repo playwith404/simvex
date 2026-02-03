@@ -9,4 +9,9 @@ type Repository interface {
 	GetPartsByObjectID(objectID string) ([]models.Part, error)
 	GetPartByID(partID string) (*models.Part, error)
 	GetAssetByPath(path string) (*models.Asset, error)
+	CreateUser(email, passwordHash string) (*models.User, error)
+	GetUserByEmail(email string) (*models.User, error)
+	GetUserByID(id string) (*models.User, error)
+	SetUserVerified(id string) error
+	UpdateUserPassword(id, passwordHash string) error
 }

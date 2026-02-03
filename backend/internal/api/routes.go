@@ -9,10 +9,18 @@ import (
 	"simvex/internal/services"
 )
 
-func RegisterRoutes(router *gin.Engine, objectService *services.ObjectService, aiService *services.AIService) {
+func RegisterRoutes(
+	router *gin.Engine,
+	objectService *services.ObjectService,
+	aiService *services.AIService,
+	authService *services.AuthService,
+	cookieName string,
+	cookieSecure bool,
+) {
 	objectHandler := handlers.NewObjectHandler(objectService)
 	partHandler := handlers.NewPartHandler(objectService)
 	aiHandler := handlers.NewAIHandler(aiService)
+	authHandler := handlers.NewAuthHandler(authService, cookieName, cookieSecure)
 
 	objectLimiter := middleware.NewRateLimiter(100, time.Minute)
 	aiLimiter := middleware.NewRateLimiter(20, time.Minute)
@@ -20,6 +28,13 @@ func RegisterRoutes(router *gin.Engine, objectService *services.ObjectService, a
 	api := router.Group("/api")
 	{
 		api.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+
+		api.POST("/auth/register", authHandler.Register)
+		api.POST("/auth/verify", authHandler.Verify)
+		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/logout", authHandler.Logout)
+		api.POST("/auth/password/reset-request", authHandler.RequestReset)
+		api.POST("/auth/password/reset-confirm", authHandler.ConfirmReset)
 
 		api.GET("/objects", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.ListObjects)
 		api.GET("/objects/:id", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetObject)
