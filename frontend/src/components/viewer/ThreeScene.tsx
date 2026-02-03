@@ -1,7 +1,17 @@
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, Environment } from '@react-three/drei'
-import { Box3, Vector3, Group, PerspectiveCamera } from 'three'
+import {
+  Box3,
+  Color,
+  Group,
+  LinearFilter,
+  PerspectiveCamera,
+  RGBAFormat,
+  UnsignedByteType,
+  Vector3,
+  WebGLRenderTarget,
+} from 'three'
 import type { Part } from '../../types'
 import type { PdfImageData } from '../../types/pdf'
 import { PartMesh } from './PartMesh'
@@ -44,16 +54,68 @@ const CaptureBridge = ({
     if (!onCaptureReady) return
 
     onCaptureReady(() => {
+      // Render to an offscreen target so we don't need preserveDrawingBuffer=true on the main canvas.
+      // This keeps normal rendering lighter/safer and makes PDF capture deterministic across browsers.
+      const renderToDataUrl = (width: number, height: number): string => {
+        const prevTarget = gl.getRenderTarget()
+        const prevAutoClear = gl.autoClear
+        const prevClearAlpha = gl.getClearAlpha()
+        const prevClearColor = gl.getClearColor(new Color())
+
+        const target = new WebGLRenderTarget(width, height, {
+          minFilter: LinearFilter,
+          magFilter: LinearFilter,
+          format: RGBAFormat,
+          type: UnsignedByteType,
+          depthBuffer: true,
+          stencilBuffer: false,
+        })
+
+        const pixels = new Uint8Array(width * height * 4)
+
+        try {
+          gl.setRenderTarget(target)
+          gl.autoClear = true
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(scene, camera)
+          gl.readRenderTargetPixels(target, 0, 0, width, height, pixels)
+        } finally {
+          gl.setRenderTarget(prevTarget)
+          gl.autoClear = prevAutoClear
+          gl.setClearColor(prevClearColor, prevClearAlpha)
+          target.dispose()
+        }
+
+        // Flip Y (WebGL origin is bottom-left).
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return ''
+        const imageData = ctx.createImageData(width, height)
+        for (let y = 0; y < height; y++) {
+          const srcRow = (height - 1 - y) * width * 4
+          const dstRow = y * width * 4
+          imageData.data.set(pixels.subarray(srcRow, srcRow + width * 4), dstRow)
+        }
+        ctx.putImageData(imageData, 0, 0)
+        return canvas.toDataURL('image/png')
+      }
+
+      const baseW = gl.domElement.width || 1200
+      const baseH = gl.domElement.height || 800
+      const capW = Math.min(baseW, 1600)
+      const capH = Math.max(1, Math.round((capW * baseH) / baseW))
+
       const group = partsGroupRef.current
       if (!group) return null
 
       const box = new Box3().setFromObject(group)
       if (box.isEmpty()) {
-        return {
-          dataUrl: gl.domElement.toDataURL('image/png'),
-          width: gl.domElement.width,
-          height: gl.domElement.height,
-        }
+        const dataUrl = renderToDataUrl(capW, capH)
+        if (!dataUrl) return null
+        return { dataUrl, width: capW, height: capH }
       }
 
       const center = box.getCenter(new Vector3())
@@ -67,11 +129,9 @@ const CaptureBridge = ({
       const prevTarget = controls?.target?.clone()
 
       if (!(camera instanceof PerspectiveCamera)) {
-        return {
-          dataUrl: gl.domElement.toDataURL('image/png'),
-          width: gl.domElement.width,
-          height: gl.domElement.height,
-        }
+        const dataUrl = renderToDataUrl(capW, capH)
+        if (!dataUrl) return null
+        return { dataUrl, width: capW, height: capH }
       }
 
       const fov = (camera.fov * Math.PI) / 180
@@ -100,8 +160,7 @@ const CaptureBridge = ({
         controls.update?.()
       }
 
-      gl.render(scene, camera)
-      const dataUrl = gl.domElement.toDataURL('image/png')
+      const dataUrl = renderToDataUrl(capW, capH)
 
       camera.position.copy(prevPosition)
       camera.zoom = prevZoom
@@ -116,11 +175,8 @@ const CaptureBridge = ({
 
       gl.render(scene, camera)
 
-      return {
-        dataUrl,
-        width: gl.domElement.width,
-        height: gl.domElement.height,
-      }
+      if (!dataUrl) return null
+      return { dataUrl, width: capW, height: capH }
     })
   }, [onCaptureReady, partsGroupRef, gl, scene, camera, controls])
 
@@ -153,7 +209,7 @@ export const ThreeScene = ({
       camera={{ position: cameraPosition, fov: 45 }}
       // Cap DPR to reduce GPU memory pressure (helps prevent Chrome "Aw, Snap" tab crashes on heavy WebGL scenes).
       dpr={[1, 1.5]}
-      gl={{ preserveDrawingBuffer: true, antialias: false, powerPreference: 'high-performance' }}
+      gl={{ preserveDrawingBuffer: false, antialias: false, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         onCanvasReady?.(gl.domElement)
       }}
