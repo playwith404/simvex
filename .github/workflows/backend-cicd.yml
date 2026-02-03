@@ -8,6 +8,7 @@ on:
       - 'backend/**'
       - 'docker-compose.yml'
       - '.github/workflows/backend-cicd.yml'
+  workflow_dispatch:
 
 jobs:
   deploy-backend:
