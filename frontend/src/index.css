@@ -530,6 +530,32 @@ button.ghost {
   border-radius: 16px;
   border: 1px solid var(--border);
   overflow: hidden;
+  position: relative;
+}
+
+.edge-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(12, 17, 25, 0.8);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.edge-toolbar button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .workflow-body {

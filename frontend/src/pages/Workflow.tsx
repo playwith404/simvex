@@ -14,7 +14,6 @@ import {
   createProject,
   deleteProject,
   fetchObjects,
-  fetchParts,
   getWorkflowFull,
   getPartNote,
   listProjects,
@@ -26,7 +25,7 @@ import {
   savePartNote,
 } from '../services/api'
 import type {
-  Part,
+  ObjectModel,
   WorkflowAttachment,
   WorkflowChecklist,
   WorkflowNode,
@@ -49,7 +48,8 @@ export const Workflow = () => {
   const [notionToken, setNotionToken] = useState('')
   const [notionParentPageId, setNotionParentPageId] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const [parts, setParts] = useState<Part[]>([])
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [objects, setObjects] = useState<ObjectModel[]>([])
   const [noteContent, setNoteContent] = useState('')
   const [noteLoading, setNoteLoading] = useState(false)
   const saveTimer = useRef<number | null>(null)
@@ -144,20 +144,15 @@ export const Workflow = () => {
 
   useEffect(() => {
     let alive = true
-    const loadParts = async () => {
+    const loadObjects = async () => {
       try {
-        const objects = await fetchObjects()
-        const allParts: Part[] = []
-        for (const obj of objects) {
-          const list = await fetchParts(obj.id)
-          allParts.push(...list)
-        }
-        if (alive) setParts(allParts)
+        const list = await fetchObjects()
+        if (alive) setObjects(list)
       } catch {
-        if (alive) setParts([])
+        if (alive) setObjects([])
       }
     }
-    loadParts()
+    loadObjects()
     return () => {
       alive = false
     }
@@ -222,6 +217,22 @@ export const Workflow = () => {
     const exists = nodes.some((n) => n.id === selectedNodeId)
     if (!exists) setSelectedNodeId(null)
   }, [nodes, selectedNodeId])
+
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
+      if (selectedNodes?.length) {
+        setSelectedNodeId(selectedNodes[0].id)
+      } else if (!selectedEdges?.length) {
+        setSelectedNodeId(null)
+      }
+      if (selectedEdges?.length) {
+        setSelectedEdgeId(selectedEdges[0].id)
+      } else {
+        setSelectedEdgeId(null)
+      }
+    },
+    [],
+  )
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -328,16 +339,17 @@ export const Workflow = () => {
   }
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
+  const selectedEdge = edges.find((e) => e.id === selectedEdgeId) || null
 
   useEffect(() => {
-    const partId = selectedNode?.data?.linkedPartId as string | undefined
-    if (!partId) {
+    const objectId = selectedNode?.data?.linkedPartId as string | undefined
+    if (!objectId) {
       setNoteContent('')
       return
     }
     let alive = true
     setNoteLoading(true)
-    getPartNote(partId)
+    getPartNote(objectId)
       .then((res) => {
         if (alive) setNoteContent(res?.content ?? '')
       })
@@ -502,6 +514,49 @@ export const Workflow = () => {
       </div>
       <div className="workflow-body">
         <div className="workflow-canvas">
+          {selectedEdge && (
+            <div className="edge-toolbar">
+              <span>선택된 연결</span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (!selectedEdgeId) return
+                  setEdges((eds) => eds.filter((e) => e.id !== selectedEdgeId))
+                  setSelectedEdgeId(null)
+                }}
+              >
+                연결 삭제
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (!selectedEdge) return
+                  const reverse = edges.find(
+                    (e) => e.source === selectedEdge.target && e.target === selectedEdge.source,
+                  )
+                  if (reverse) {
+                    setEdges((eds) => eds.filter((e) => e.id !== reverse.id))
+                  } else {
+                    const id = makeId()
+                    setEdges((eds) => [
+                      ...eds,
+                      {
+                        id,
+                        source: selectedEdge.target,
+                        target: selectedEdge.source,
+                        markerEnd: { type: MarkerType.ArrowClosed, color: '#8fa3b8' },
+                        style: { stroke: '#8fa3b8' },
+                      },
+                    ])
+                  }
+                }}
+              >
+                양방향 토글
+              </button>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -509,6 +564,10 @@ export const Workflow = () => {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
+            onSelectionChange={handleSelectionChange}
+            nodesFocusable
+            edgesFocusable
             fitView
             nodeTypes={{ editable: EditableNode }}
           >
@@ -563,32 +622,32 @@ export const Workflow = () => {
                 />
               </label>
               <label>
-                부품 연결
+                오브젝트 연결
                 <select
                   value={String(selectedNode.data?.linkedPartId ?? '')}
                   onChange={(e) => updateSelectedNode({ linkedPartId: e.target.value })}
                 >
                   <option value="">선택 없음</option>
-                  {parts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
+                  {objects.map((obj) => (
+                    <option key={obj.id} value={obj.id}>
+                      {obj.name}
                     </option>
                   ))}
                 </select>
               </label>
               <div className="workflow-note">
                 <div className="workflow-checklist__header">
-                  <span>부품 노트</span>
+                  <span>오브젝트 노트</span>
                   <button
                     type="button"
                     className="ghost"
                     disabled={!selectedNode.data?.linkedPartId || noteLoading}
                     onClick={async () => {
-                      const partId = String(selectedNode.data?.linkedPartId || '')
-                      if (!partId) return
+                      const objectId = String(selectedNode.data?.linkedPartId || '')
+                      if (!objectId) return
                       setNoteLoading(true)
                       try {
-                        await savePartNote(partId, noteContent)
+                        await savePartNote(objectId, noteContent)
                       } finally {
                         setNoteLoading(false)
                       }
@@ -598,7 +657,7 @@ export const Workflow = () => {
                   </button>
                 </div>
                 <textarea
-                  placeholder={selectedNode.data?.linkedPartId ? '부품 노트를 입력하세요' : '부품을 선택하면 노트를 작성할 수 있습니다.'}
+                  placeholder={selectedNode.data?.linkedPartId ? '오브젝트 노트를 입력하세요' : '오브젝트를 선택하면 노트를 작성할 수 있습니다.'}
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
                   disabled={!selectedNode.data?.linkedPartId || noteLoading}
