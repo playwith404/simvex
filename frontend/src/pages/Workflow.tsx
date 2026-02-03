@@ -99,11 +99,15 @@ export const Workflow = () => {
           notionStatus().catch(() => ({ connected: false })),
         ])
         if (!alive) return
-        setProjects(projectList)
+        setProjects(Array.isArray(projectList) ? projectList : [])
         setNotionConnected(notionState.connected)
-        if (projectList.length > 0) {
+        if (Array.isArray(projectList) && projectList.length > 0) {
           setActiveProjectId(projectList[0].id)
         }
+      } catch {
+        if (!alive) return
+        setProjects([])
+        setActiveProjectId('')
       } finally {
         if (alive) setLoading(false)
       }
