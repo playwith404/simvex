@@ -29,7 +29,7 @@ func (h *NotionHandler) Connect(c *gin.Context) {
 	}
 	var req notionConnectRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Token == "" {
-		respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "토큰이 필요합니다", nil)
+		respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Notion 토큰이 필요합니다", nil)
 		return
 	}
 	if req.ParentPageID == "" {

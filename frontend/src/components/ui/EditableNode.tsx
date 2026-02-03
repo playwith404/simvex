@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { Handle, Position } from 'reactflow'
 import type { NodeProps } from 'reactflow'
 
 export type Attachment = {
@@ -10,10 +11,12 @@ export type Attachment = {
 
 type NodeData = {
   label: string
+  color?: string
   attachments?: Attachment[]
   onChange: (id: string, value: string) => void
   onAddAttachment: (id: string, attachment: Attachment) => void
   onRemoveAttachment: (id: string, index: number) => void
+  onSelect: (id: string) => void
 }
 
 const EditableNodeComponent = ({ id, data }: NodeProps<NodeData>) => {
@@ -24,8 +27,16 @@ const EditableNodeComponent = ({ id, data }: NodeProps<NodeData>) => {
     return `att-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   }
 
+  const accent = data.color || '#f8c86a'
+
   return (
-    <div className="flow-node">
+    <div
+      className="flow-node"
+      style={{ borderColor: accent, boxShadow: `0 0 0 1px ${accent}40` }}
+      onClick={() => data.onSelect(id)}
+    >
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
       <textarea
         value={data.label}
         onChange={(e) => data.onChange(id, e.target.value)}

@@ -53,6 +53,11 @@ export const Workflow = () => {
   const [noteContent, setNoteContent] = useState('')
   const [noteLoading, setNoteLoading] = useState(false)
   const saveTimer = useRef<number | null>(null)
+
+  const handleSelectNode = useCallback((id: string) => {
+    setSelectedNodeId(id)
+  }, [])
+
   const makeId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
       return crypto.randomUUID()
@@ -184,6 +189,7 @@ export const Workflow = () => {
           onChange: handleNodeLabelChange,
           onAddAttachment: handleAddAttachment,
           onRemoveAttachment: handleRemoveAttachment,
+          onSelect: handleSelectNode,
         },
         type: 'editable',
       }))
@@ -191,7 +197,8 @@ export const Workflow = () => {
         id: e.id,
         source: e.source,
         target: e.target,
-        markerEnd: { type: MarkerType.ArrowClosed },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#8fa3b8' },
+        style: { stroke: '#8fa3b8' },
       }))
       setNodes(mappedNodes)
       setEdges(mappedEdges)
@@ -223,7 +230,8 @@ export const Workflow = () => {
           {
             ...connection,
             id: makeId(),
-            markerEnd: { type: MarkerType.ArrowClosed },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#8fa3b8' },
+            style: { stroke: '#8fa3b8' },
           },
           eds,
         ),
@@ -238,10 +246,12 @@ export const Workflow = () => {
       position: { x: 120 + nodes.length * 40, y: 120 + nodes.length * 30 },
       data: {
         label: '새 노드',
+        color: '#f8c86a',
         attachments: [],
         onChange: handleNodeLabelChange,
         onAddAttachment: handleAddAttachment,
         onRemoveAttachment: handleRemoveAttachment,
+        onSelect: handleSelectNode,
       },
       type: 'editable',
     }
@@ -255,7 +265,7 @@ export const Workflow = () => {
   }
 
   const handleCreateProject = async () => {
-    const title = window.prompt('새 프로젝트 제목을 입력하세요')
+    const title = window.prompt('프로젝트 이름을 입력하세요')
     if (!title) return
     const project = await createProject(title)
     setProjects((prev) => [project, ...prev])
@@ -474,10 +484,10 @@ export const Workflow = () => {
                     window.alert(
                       'Notion 연결 방법:\n' +
                         '1) Notion → Settings & members → Integrations\n' +
-                        '2) 새 Integration 생성\n' +
+                        '2) New integration 생성\n' +
                         '3) Internal Integration Token 복사\n' +
-                        '4) 워크플로우를 저장할 페이지 생성 후 해당 페이지에 Integration 연결\n' +
-                        '5) 페이지 URL에서 Page ID 복사 (예: notion.so/페이지이름-{32자리ID})\n',
+                        '4) 동기화할 페이지를 만들고 Integration을 연결\n' +
+                        '5) 페이지 URL에서 Page ID 복사 (notion.so/이름-{32자리ID})\n',
                     )
                   }}
                 >
@@ -492,19 +502,19 @@ export const Workflow = () => {
       </div>
       <div className="workflow-body">
         <div className="workflow-canvas">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-          fitView
-          nodeTypes={{ editable: EditableNode }}
-        >
-          <Background gap={16} color="#24333b" />
-          <Controls />
-        </ReactFlow>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            fitView
+            nodeTypes={{ editable: EditableNode }}
+          >
+            <Background gap={16} color="#24333b" />
+            <Controls />
+          </ReactFlow>
         </div>
         <aside className="workflow-detail">
           {selectedNode ? (
@@ -558,7 +568,7 @@ export const Workflow = () => {
                   value={String(selectedNode.data?.linkedPartId ?? '')}
                   onChange={(e) => updateSelectedNode({ linkedPartId: e.target.value })}
                 >
-                  <option value="">선택 안 함</option>
+                  <option value="">선택 없음</option>
                   {parts.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -588,7 +598,7 @@ export const Workflow = () => {
                   </button>
                 </div>
                 <textarea
-                  placeholder={selectedNode.data?.linkedPartId ? '부품 노트를 입력하세요.' : '부품을 선택하면 노트를 작성할 수 있습니다.'}
+                  placeholder={selectedNode.data?.linkedPartId ? '부품 노트를 입력하세요' : '부품을 선택하면 노트를 작성할 수 있습니다.'}
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
                   disabled={!selectedNode.data?.linkedPartId || noteLoading}
