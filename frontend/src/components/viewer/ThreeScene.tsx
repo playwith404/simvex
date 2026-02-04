@@ -281,6 +281,25 @@ export const ThreeScene = ({
     [parts, hiddenPartIds],
   )
 
+  const orderMap = useMemo(() => {
+    const orders = [...new Set(visibleParts.map((p) => p.decomposeOrder).filter((o) => o > 0))].sort(
+      (a, b) => a - b,
+    )
+    const map = new Map<number, number>()
+    orders.forEach((o, i) => map.set(o, i + 1))
+    return { map, totalSteps: orders.length }
+  }, [visibleParts])
+
+  const getEffectiveLevel = useMemo(() => {
+    const { map, totalSteps } = orderMap
+    return (part: Part) => {
+      if (part.decomposeOrder === 0 || totalSteps === 0) return decompositionLevel
+      const k = map.get(part.decomposeOrder) ?? 1
+      const raw = decompositionLevel * totalSteps - (k - 1)
+      return Math.max(0, Math.min(1, raw))
+    }
+  }, [orderMap, decompositionLevel])
+
   const clippingPlanes = useMemo(() => {
     if (!clipEnabled) return []
     const normal = new Vector3(
@@ -310,7 +329,7 @@ export const ThreeScene = ({
             <PartMesh
               key={part.id}
               part={part}
-              decompositionLevel={decompositionLevel}
+              decompositionLevel={getEffectiveLevel(part)}
               isSelected={selectedPartId === part.id}
               isHovered={hoveredPartId === part.id}
               onSelect={onSelectPart}

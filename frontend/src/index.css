@@ -985,6 +985,28 @@ button.ghost {
   line-height: 1;
 }
 
+.decompose-slider__step {
+  color: var(--accent);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.decompose-slider__ticks {
+  position: relative;
+  height: 8px;
+  margin: 0 2px;
+}
+
+.decompose-slider__tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 8px;
+  background: var(--muted);
+  opacity: 0.5;
+  transform: translateX(-50%);
+}
+
 .decompose-slider__speed {
   font-size: 11px;
   padding: 2px 4px;

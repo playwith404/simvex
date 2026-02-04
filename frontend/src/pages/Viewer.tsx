@@ -127,6 +127,16 @@ export const Viewer = () => {
     [parts, selectedPartId],
   )
 
+  const { totalSteps, currentStep } = useMemo(() => {
+    const orders = [...new Set(parts.map((p) => p.decomposeOrder).filter((o) => o > 0))].sort(
+      (a, b) => a - b,
+    )
+    const n = orders.length
+    if (n === 0) return { totalSteps: 0, currentStep: 0 }
+    const step = Math.min(n, Math.floor(decompositionLevel * n) + (decompositionLevel > 0 ? 1 : 0))
+    return { totalSteps: n, currentStep: step }
+  }, [parts, decompositionLevel])
+
   // #1 가시성 토글 핸들러
   const handleToggleVisibility = useCallback((partId: string) => {
     setHiddenPartIds((prev) => {
@@ -354,7 +364,12 @@ export const Viewer = () => {
                 </button>
               )}
             </div>
-            <DecomposeSlider value={decompositionLevel} onChange={setDecompositionLevel} />
+            <DecomposeSlider
+              value={decompositionLevel}
+              onChange={setDecompositionLevel}
+              totalSteps={totalSteps}
+              currentStep={currentStep}
+            />
             <ClipControls
               enabled={clipEnabled}
               axis={clipAxis}

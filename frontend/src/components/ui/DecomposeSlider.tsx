@@ -3,9 +3,13 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 export const DecomposeSlider = ({
   value,
   onChange,
+  totalSteps = 0,
+  currentStep = 0,
 }: {
   value: number
   onChange: (value: number) => void
+  totalSteps?: number
+  currentStep?: number
 }) => {
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
@@ -59,7 +63,12 @@ export const DecomposeSlider = ({
   return (
     <div className="decompose-slider">
       <div className="decompose-slider__header">
-        <label>분해도: {Math.round(value * 100)}%</label>
+        <label>
+          분해도: {Math.round(value * 100)}%
+          {totalSteps > 0 && (
+            <span className="decompose-slider__step"> (단계 {currentStep}/{totalSteps})</span>
+          )}
+        </label>
         <div className="decompose-slider__actions">
           <button type="button" className="decompose-slider__play" onClick={handleTogglePlay}>
             {playing ? '⏸' : '▶'}
@@ -78,6 +87,17 @@ export const DecomposeSlider = ({
           )}
         </div>
       </div>
+      {totalSteps > 1 && (
+        <div className="decompose-slider__ticks">
+          {Array.from({ length: totalSteps - 1 }, (_, i) => (
+            <div
+              key={i}
+              className="decompose-slider__tick"
+              style={{ left: `${((i + 1) / totalSteps) * 100}%` }}
+            />
+          ))}
+        </div>
+      )}
       <input
         type="range"
         min={0}

@@ -25,6 +25,7 @@ export type Part = {
   decomposeDirY: number
   decomposeDirZ: number
   decomposeDistance: number
+  decomposeOrder: number
 }
 
 export type ChatMessage = {

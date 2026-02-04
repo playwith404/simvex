@@ -151,6 +151,7 @@ func (r *PostgresRepository) migrate() error {
 			url TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);`,
+		`ALTER TABLE parts ADD COLUMN IF NOT EXISTS decompose_order INTEGER NOT NULL DEFAULT 0;`,
 		`DO $$ BEGIN
 			ALTER TABLE objects ADD COLUMN IF NOT EXISTS version TEXT DEFAULT '1.0';
 		EXCEPTION WHEN duplicate_column THEN NULL;
@@ -230,52 +231,53 @@ func (r *PostgresRepository) seedIfEmpty() error {
 		},
 	}
 
-	p := func(pid, objID, name, material, role, modelPath string, lpx, lpy, lpz, ddx, ddy, ddz, dd float64) models.Part {
+	p := func(pid, objID, name, material, role, modelPath string, lpx, lpy, lpz, ddx, ddy, ddz, dd float64, dOrder int) models.Part {
 		return models.Part{
 			ID: pid, ObjectID: objID, Name: name, Material: material, Role: role, ModelPath: modelPath,
 			LocalPosX: lpx, LocalPosY: lpy, LocalPosZ: lpz,
 			DecomposeDirX: ddx, DecomposeDirY: ddy, DecomposeDirZ: ddz, DecomposeDistance: dd,
+			DecomposeOrder: dOrder,
 		}
 	}
 
 	parts := []models.Part{
-		// Engine V4
-		p(id("engine-v4", "piston"), "engine-v4", "Piston", "Aluminum alloy", "Receives combustion force", "/assets/models/engine-v4/piston.glb", 0, 0, 0, 0, 1, 0, 1.2),
-		p(id("engine-v4", "piston-ring"), "engine-v4", "Piston Ring", "Steel", "Seals cylinder and controls oil", "/assets/models/engine-v4/piston-ring.glb", 0, 0, 0, 0, 1, 0, 1.4),
-		p(id("engine-v4", "piston-pin"), "engine-v4", "Piston Pin", "Steel", "Connects piston and rod", "/assets/models/engine-v4/piston-pin.glb", 0, 0, 0, 1, 0, 0, 1.0),
-		p(id("engine-v4", "connecting-rod"), "engine-v4", "Connecting Rod", "Steel", "Transmits motion to crankshaft", "/assets/models/engine-v4/connecting-rod.glb", 0, 0, 0, 0, -1, 0, 1.3),
-		p(id("engine-v4", "connecting-rod-cap"), "engine-v4", "Rod Cap", "Steel", "Secures rod to crankshaft", "/assets/models/engine-v4/connecting-rod-cap.glb", 0, 0, 0, 0, -1, 0, 1.1),
-		p(id("engine-v4", "conrod-bolt"), "engine-v4", "Rod Bolt", "Steel", "Fastens the rod cap", "/assets/models/engine-v4/conrod-bolt.glb", 0, 0, 0, 1, 0, 0, 1.0),
-		p(id("engine-v4", "crankshaft"), "engine-v4", "Crankshaft", "Steel", "Converts linear to rotary motion", "/assets/models/engine-v4/crankshaft.glb", 0, 0, 0, 0, 0, 1, 1.5),
+		// Engine V4 (7 steps: 1=Piston Ring, 2=Piston Pin, 3=Piston, 4=Rod Bolt, 5=Rod Cap, 6=Connecting Rod, 7=Crankshaft)
+		p(id("engine-v4", "piston"), "engine-v4", "Piston", "Aluminum alloy", "Receives combustion force", "/assets/models/engine-v4/piston.glb", 0, 0, 0, 0, 1, 0, 1.2, 3),
+		p(id("engine-v4", "piston-ring"), "engine-v4", "Piston Ring", "Steel", "Seals cylinder and controls oil", "/assets/models/engine-v4/piston-ring.glb", 0, 0, 0, 0, 1, 0, 1.4, 1),
+		p(id("engine-v4", "piston-pin"), "engine-v4", "Piston Pin", "Steel", "Connects piston and rod", "/assets/models/engine-v4/piston-pin.glb", 0, 0, 0, 1, 0, 0, 1.0, 2),
+		p(id("engine-v4", "connecting-rod"), "engine-v4", "Connecting Rod", "Steel", "Transmits motion to crankshaft", "/assets/models/engine-v4/connecting-rod.glb", 0, 0, 0, 0, -1, 0, 1.3, 6),
+		p(id("engine-v4", "connecting-rod-cap"), "engine-v4", "Rod Cap", "Steel", "Secures rod to crankshaft", "/assets/models/engine-v4/connecting-rod-cap.glb", 0, 0, 0, 0, -1, 0, 1.1, 5),
+		p(id("engine-v4", "conrod-bolt"), "engine-v4", "Rod Bolt", "Steel", "Fastens the rod cap", "/assets/models/engine-v4/conrod-bolt.glb", 0, 0, 0, 1, 0, 0, 1.0, 4),
+		p(id("engine-v4", "crankshaft"), "engine-v4", "Crankshaft", "Steel", "Converts linear to rotary motion", "/assets/models/engine-v4/crankshaft.glb", 0, 0, 0, 0, 0, 1, 1.5, 7),
 
-		// Suspension
-		p(id("suspension", "base"), "suspension", "Base", "Steel", "Structural base frame", "/assets/models/suspension/base.glb", 0, 0, 0, 0, -1, 0, 0.9),
-		p(id("suspension", "rod"), "suspension", "Rod", "Steel", "Connects components", "/assets/models/suspension/rod.glb", 0, 0, 0, 0, 1, 0, 1.0),
-		p(id("suspension", "spring"), "suspension", "Spring", "Spring steel", "Stores and releases energy", "/assets/models/suspension/spring.glb", 0, 0, 0, 0, 1, 0, 1.2),
-		p(id("suspension", "nut"), "suspension", "Nut", "Steel", "Fastening element", "/assets/models/suspension/nut.glb", 0, 0, 0, 1, 0, 0, 0.7),
-		p(id("suspension", "cap"), "suspension", "Cap", "Steel", "Top cap and guard", "/assets/models/suspension/nit.glb", 0, 0, 0, 0, 1, 0, 0.7),
+		// Suspension (5 steps: 1=Cap, 2=Nut, 3=Spring, 4=Rod, 5=Base)
+		p(id("suspension", "base"), "suspension", "Base", "Steel", "Structural base frame", "/assets/models/suspension/base.glb", 0, 0, 0, 0, -1, 0, 0.9, 5),
+		p(id("suspension", "rod"), "suspension", "Rod", "Steel", "Connects components", "/assets/models/suspension/rod.glb", 0, 0, 0, 0, 1, 0, 1.0, 4),
+		p(id("suspension", "spring"), "suspension", "Spring", "Spring steel", "Stores and releases energy", "/assets/models/suspension/spring.glb", 0, 0, 0, 0, 1, 0, 1.2, 3),
+		p(id("suspension", "nut"), "suspension", "Nut", "Steel", "Fastening element", "/assets/models/suspension/nut.glb", 0, 0, 0, 1, 0, 0, 0.7, 2),
+		p(id("suspension", "cap"), "suspension", "Cap", "Steel", "Top cap and guard", "/assets/models/suspension/nit.glb", 0, 0, 0, 0, 1, 0, 0.7, 1),
 
-		// Robot Arm
-		p(id("robot-arm", "base"), "robot-arm", "Base", "Aluminum", "Supports the arm", "/assets/models/robot-arm/base.glb", 0, 0, 0, 0, -1, 0, 1.0),
-		p(id("robot-arm", "link-1"), "robot-arm", "Link 1", "Aluminum", "First link", "/assets/models/robot-arm/part2.glb", 0, 0, 0, 1, 0, 0, 1.2),
-		p(id("robot-arm", "link-2"), "robot-arm", "Link 2", "Aluminum", "Second link", "/assets/models/robot-arm/part3.glb", 0, 0, 0, -1, 0, 0, 1.2),
-		p(id("robot-arm", "joint-1"), "robot-arm", "Joint 1", "Steel", "Rotation joint", "/assets/models/robot-arm/part4.glb", 0, 0, 0, 0, 1, 0, 0.9),
-		p(id("robot-arm", "joint-2"), "robot-arm", "Joint 2", "Steel", "Rotation joint", "/assets/models/robot-arm/part5.glb", 0, 0, 0, 0, 1, 0, 0.9),
-		p(id("robot-arm", "link-3"), "robot-arm", "Link 3", "Aluminum", "Third link", "/assets/models/robot-arm/part6.glb", 0, 0, 0, 0, 0, 1, 1.1),
-		p(id("robot-arm", "link-4"), "robot-arm", "Link 4", "Aluminum", "End link", "/assets/models/robot-arm/part7.glb", 0, 0, 0, 0, 0, 1, 1.1),
-		p(id("robot-arm", "end-effector"), "robot-arm", "End Effector", "Aluminum", "Tool mounting part", "/assets/models/robot-arm/part8.glb", 0, 0, 0, 0, 1, 0, 1.0),
+		// Robot Arm (6 steps: 1=End Effector, 2=Link 4, 3=Link 3, 4=Joint 2+Link 2, 5=Joint 1+Link 1, 6=Base)
+		p(id("robot-arm", "base"), "robot-arm", "Base", "Aluminum", "Supports the arm", "/assets/models/robot-arm/base.glb", 0, 0, 0, 0, -1, 0, 1.0, 6),
+		p(id("robot-arm", "link-1"), "robot-arm", "Link 1", "Aluminum", "First link", "/assets/models/robot-arm/part2.glb", 0, 0, 0, 1, 0, 0, 1.2, 5),
+		p(id("robot-arm", "link-2"), "robot-arm", "Link 2", "Aluminum", "Second link", "/assets/models/robot-arm/part3.glb", 0, 0, 0, -1, 0, 0, 1.2, 4),
+		p(id("robot-arm", "joint-1"), "robot-arm", "Joint 1", "Steel", "Rotation joint", "/assets/models/robot-arm/part4.glb", 0, 0, 0, 0, 1, 0, 0.9, 5),
+		p(id("robot-arm", "joint-2"), "robot-arm", "Joint 2", "Steel", "Rotation joint", "/assets/models/robot-arm/part5.glb", 0, 0, 0, 0, 1, 0, 0.9, 4),
+		p(id("robot-arm", "link-3"), "robot-arm", "Link 3", "Aluminum", "Third link", "/assets/models/robot-arm/part6.glb", 0, 0, 0, 0, 0, 1, 1.1, 3),
+		p(id("robot-arm", "link-4"), "robot-arm", "Link 4", "Aluminum", "End link", "/assets/models/robot-arm/part7.glb", 0, 0, 0, 0, 0, 1, 1.1, 2),
+		p(id("robot-arm", "end-effector"), "robot-arm", "End Effector", "Aluminum", "Tool mounting part", "/assets/models/robot-arm/part8.glb", 0, 0, 0, 0, 1, 0, 1.0, 1),
 
-		// Machine Vice
-		p(id("machine-vice", "body"), "machine-vice", "Body", "Cast iron", "Main body", "/assets/models/machine-vice/part1.glb", 0, 0, 0, 0, -1, 0, 1.1),
-		p(id("machine-vice", "guide"), "machine-vice", "Guide", "Cast iron", "Sliding guide", "/assets/models/machine-vice/part1-fuhrung.glb", 0, 0, 0, 1, 0, 0, 0.9),
-		p(id("machine-vice", "fixed-jaw"), "machine-vice", "Fixed Jaw", "Steel", "Fixed clamping jaw", "/assets/models/machine-vice/part2-feste-backe.glb", 0, 0, 0, 0, 1, 0, 1.0),
-		p(id("machine-vice", "movable-jaw"), "machine-vice", "Movable Jaw", "Steel", "Movable clamping jaw", "/assets/models/machine-vice/part3-lose-backe.glb", 0, 0, 0, 0, 1, 0, 1.0),
-		p(id("machine-vice", "spindle-base"), "machine-vice", "Spindle Base", "Steel", "Spindle support", "/assets/models/machine-vice/part4-spindelsockel.glb", 0, 0, 0, 0, 0, 1, 1.0),
-		p(id("machine-vice", "clamp-jaw"), "machine-vice", "Clamp Jaw", "Steel", "Clamping surface", "/assets/models/machine-vice/part5-spannbacke.glb", 0, 0, 0, 1, 0, 0, 1.0),
-		p(id("machine-vice", "guide-rail"), "machine-vice", "Guide Rail", "Steel", "Linear guide rail", "/assets/models/machine-vice/part6-fuhrungschiene.glb", 0, 0, 0, 1, 0, 0, 1.0),
-		p(id("machine-vice", "spindle"), "machine-vice", "Spindle", "Steel", "Screw drive spindle", "/assets/models/machine-vice/part7-trapezspindel.glb", 0, 0, 0, 0, 0, 1, 1.2),
-		p(id("machine-vice", "base-plate"), "machine-vice", "Base Plate", "Cast iron", "Mounting base", "/assets/models/machine-vice/part8-grundplatte.glb", 0, 0, 0, 0, -1, 0, 1.1),
-		p(id("machine-vice", "pressure-sleeve"), "machine-vice", "Pressure Sleeve", "Steel", "Load distribution", "/assets/models/machine-vice/part9-druckhulse.glb", 0, 0, 0, 0, 1, 0, 0.9),
+		// Machine Vice (7 steps: 1=Clamp Jaw, 2=Pressure Sleeve, 3=Movable Jaw, 4=Spindle, 5=Fixed Jaw+Spindle Base, 6=Guide+Guide Rail, 7=Body+Base Plate)
+		p(id("machine-vice", "body"), "machine-vice", "Body", "Cast iron", "Main body", "/assets/models/machine-vice/part1.glb", 0, 0, 0, 0, -1, 0, 1.1, 7),
+		p(id("machine-vice", "guide"), "machine-vice", "Guide", "Cast iron", "Sliding guide", "/assets/models/machine-vice/part1-fuhrung.glb", 0, 0, 0, 1, 0, 0, 0.9, 6),
+		p(id("machine-vice", "fixed-jaw"), "machine-vice", "Fixed Jaw", "Steel", "Fixed clamping jaw", "/assets/models/machine-vice/part2-feste-backe.glb", 0, 0, 0, 0, 1, 0, 1.0, 5),
+		p(id("machine-vice", "movable-jaw"), "machine-vice", "Movable Jaw", "Steel", "Movable clamping jaw", "/assets/models/machine-vice/part3-lose-backe.glb", 0, 0, 0, 0, 1, 0, 1.0, 3),
+		p(id("machine-vice", "spindle-base"), "machine-vice", "Spindle Base", "Steel", "Spindle support", "/assets/models/machine-vice/part4-spindelsockel.glb", 0, 0, 0, 0, 0, 1, 1.0, 5),
+		p(id("machine-vice", "clamp-jaw"), "machine-vice", "Clamp Jaw", "Steel", "Clamping surface", "/assets/models/machine-vice/part5-spannbacke.glb", 0, 0, 0, 1, 0, 0, 1.0, 1),
+		p(id("machine-vice", "guide-rail"), "machine-vice", "Guide Rail", "Steel", "Linear guide rail", "/assets/models/machine-vice/part6-fuhrungschiene.glb", 0, 0, 0, 1, 0, 0, 1.0, 6),
+		p(id("machine-vice", "spindle"), "machine-vice", "Spindle", "Steel", "Screw drive spindle", "/assets/models/machine-vice/part7-trapezspindel.glb", 0, 0, 0, 0, 0, 1, 1.2, 4),
+		p(id("machine-vice", "base-plate"), "machine-vice", "Base Plate", "Cast iron", "Mounting base", "/assets/models/machine-vice/part8-grundplatte.glb", 0, 0, 0, 0, -1, 0, 1.1, 7),
+		p(id("machine-vice", "pressure-sleeve"), "machine-vice", "Pressure Sleeve", "Steel", "Load distribution", "/assets/models/machine-vice/part9-druckhulse.glb", 0, 0, 0, 0, 1, 0, 0.9, 2),
 	}
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -294,14 +296,14 @@ func (r *PostgresRepository) seedIfEmpty() error {
 		}
 	}
 
-	partStmt, err := tx.Prepare(`INSERT INTO parts (id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
+	partStmt, err := tx.Prepare(`INSERT INTO parts (id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance, decompose_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`)
 	if err != nil {
 		return rollback(tx, err)
 	}
 	defer partStmt.Close()
 
 	for _, part := range parts {
-		if _, err := partStmt.Exec(part.ID, part.ObjectID, part.Name, part.Material, part.Role, part.ModelPath, part.LocalPosX, part.LocalPosY, part.LocalPosZ, part.DecomposeDirX, part.DecomposeDirY, part.DecomposeDirZ, part.DecomposeDistance); err != nil {
+		if _, err := partStmt.Exec(part.ID, part.ObjectID, part.Name, part.Material, part.Role, part.ModelPath, part.LocalPosX, part.LocalPosY, part.LocalPosZ, part.DecomposeDirX, part.DecomposeDirY, part.DecomposeDirZ, part.DecomposeDistance, part.DecomposeOrder); err != nil {
 			return rollback(tx, err)
 		}
 	}
@@ -454,7 +456,7 @@ func (r *PostgresRepository) GetObjectVersions(objectID string) ([]models.Object
 }
 
 func (r *PostgresRepository) GetPartsByObjectID(objectID string) ([]models.Part, error) {
-	rows, err := r.db.Query(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance FROM parts WHERE object_id = $1`, objectID)
+	rows, err := r.db.Query(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance, decompose_order FROM parts WHERE object_id = $1`, objectID)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +465,7 @@ func (r *PostgresRepository) GetPartsByObjectID(objectID string) ([]models.Part,
 	var parts []models.Part
 	for rows.Next() {
 		var part models.Part
-		if err := rows.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance); err != nil {
+		if err := rows.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance, &part.DecomposeOrder); err != nil {
 			return nil, err
 		}
 		parts = append(parts, part)
@@ -472,9 +474,9 @@ func (r *PostgresRepository) GetPartsByObjectID(objectID string) ([]models.Part,
 }
 
 func (r *PostgresRepository) GetPartByID(partID string) (*models.Part, error) {
-	row := r.db.QueryRow(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance FROM parts WHERE id = $1`, partID)
+	row := r.db.QueryRow(`SELECT id, object_id, name, material, role, model_path, local_pos_x, local_pos_y, local_pos_z, decompose_dir_x, decompose_dir_y, decompose_dir_z, decompose_distance, decompose_order FROM parts WHERE id = $1`, partID)
 	var part models.Part
-	if err := row.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance); err != nil {
+	if err := row.Scan(&part.ID, &part.ObjectID, &part.Name, &part.Material, &part.Role, &part.ModelPath, &part.LocalPosX, &part.LocalPosY, &part.LocalPosZ, &part.DecomposeDirX, &part.DecomposeDirY, &part.DecomposeDirZ, &part.DecomposeDistance, &part.DecomposeOrder); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}

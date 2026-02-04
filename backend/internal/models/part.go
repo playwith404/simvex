@@ -14,4 +14,5 @@ type Part struct {
 	DecomposeDirY     float64 `json:"decomposeDirY"`
 	DecomposeDirZ     float64 `json:"decomposeDirZ"`
 	DecomposeDistance float64 `json:"decomposeDistance"`
+	DecomposeOrder   int     `json:"decomposeOrder"`
 }
