@@ -216,7 +216,18 @@ func (s *NotionService) createNodePage(ctx context.Context, token, parentID stri
 		"properties": props,
 	}
 	if len(children) > 0 {
-		payload["children"] = children
+		payload["children"] = []map[string]interface{}{
+			{
+				"object": "block",
+				"type":   "toggle",
+				"toggle": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": "SIMVEX"}},
+					},
+				},
+				"children": children,
+			},
+		}
 	}
 	var resp notionCreatePageResponse
 	if err := s.callNotion(ctx, token, "POST", "https://api.notion.com/v1/pages", payload, &resp); err != nil {
@@ -253,55 +264,73 @@ func (s *NotionService) updateNodeProperties(ctx context.Context, token string, 
 
 func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment, objectName, objectNote string) []map[string]interface{} {
 	children := []map[string]interface{}{}
+
 	children = append(children, map[string]interface{}{
 		"object": "block",
 		"type":   "heading_3",
 		"heading_3": map[string]interface{}{
 			"rich_text": []map[string]interface{}{
-				{"type": "text", "text": map[string]interface{}{"content": "SIMVEX_START"}},
+				{"type": "text", "text": map[string]interface{}{"content": "노드 요약"}},
+			},
+		},
+	})
+
+	children = append(children, map[string]interface{}{
+		"object": "block",
+		"type":   "bulleted_list_item",
+		"bulleted_list_item": map[string]interface{}{
+			"rich_text": []map[string]interface{}{
+				{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("날짜: %s", node.ScheduledDate)}},
 			},
 		},
 	})
 	children = append(children, map[string]interface{}{
 		"object": "block",
-		"type":   "paragraph",
-		"paragraph": map[string]interface{}{
+		"type":   "bulleted_list_item",
+		"bulleted_list_item": map[string]interface{}{
 			"rich_text": []map[string]interface{}{
-				{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("Scheduled: %s", node.ScheduledDate)}},
-			},
-		},
-	})
-	children = append(children, map[string]interface{}{
-		"object": "block",
-		"type":   "paragraph",
-		"paragraph": map[string]interface{}{
-			"rich_text": []map[string]interface{}{
-				{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("Progress: %d", node.Progress)}},
+				{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("진행률: %d", node.Progress)}},
 			},
 		},
 	})
 	if node.Color != "" {
 		children = append(children, map[string]interface{}{
 			"object": "block",
-			"type":   "paragraph",
-			"paragraph": map[string]interface{}{
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("Color: %s", node.Color)}},
+					{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("색상: %s", node.Color)}},
 				},
 			},
 		})
 	}
-	if node.Description != "" {
+
+	if strings.TrimSpace(node.Description) != "" {
 		children = append(children, map[string]interface{}{
 			"object": "block",
-			"type":   "paragraph",
-			"paragraph": map[string]interface{}{
+			"type":   "divider",
+			"divider": map[string]interface{}{},
+		})
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "heading_3",
+			"heading_3": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{"type": "text", "text": map[string]interface{}{"content": "설명"}},
+				},
+			},
+		})
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "quote",
+			"quote": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
 					{"type": "text", "text": map[string]interface{}{"content": node.Description}},
 				},
 			},
 		})
 	}
+
 	if strings.TrimSpace(node.LinkedPartID) != "" {
 		label := objectName
 		if strings.TrimSpace(label) == "" {
@@ -309,21 +338,15 @@ func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChe
 		}
 		children = append(children, map[string]interface{}{
 			"object": "block",
-			"type":   "paragraph",
-			"paragraph": map[string]interface{}{
-				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("Object: %s", label)}},
-				},
-			},
+			"type":   "divider",
+			"divider": map[string]interface{}{},
 		})
-	}
-	if strings.TrimSpace(objectNote) != "" {
 		children = append(children, map[string]interface{}{
 			"object": "block",
-			"type":   "paragraph",
-			"paragraph": map[string]interface{}{
+			"type":   "heading_3",
+			"heading_3": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": "Object Note:"}},
+					{"type": "text", "text": map[string]interface{}{"content": "오브젝트"}},
 				},
 			},
 		})
@@ -332,49 +355,123 @@ func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChe
 			"type":   "paragraph",
 			"paragraph": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": objectNote}},
+					{"type": "text", "text": map[string]interface{}{"content": label}},
 				},
 			},
 		})
-	}
-	for _, c := range checklists {
-		if c.NodeID != node.ID {
-			continue
+		if strings.TrimSpace(objectNote) != "" {
+			children = append(children, map[string]interface{}{
+				"object": "block",
+				"type":   "paragraph",
+				"paragraph": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": "노트"}},
+					},
+				},
+			})
+			children = append(children, map[string]interface{}{
+				"object": "block",
+				"type":   "quote",
+				"quote": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": objectNote}},
+					},
+				},
+			})
 		}
+	}
+
+	if len(checklists) > 0 {
 		children = append(children, map[string]interface{}{
 			"object": "block",
-			"type":   "to_do",
-			"to_do": map[string]interface{}{
+			"type":   "divider",
+			"divider": map[string]interface{}{},
+		})
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "heading_3",
+			"heading_3": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": c.Text}},
+					{"type": "text", "text": map[string]interface{}{"content": "체크리스트"}},
 				},
-				"checked": c.Done,
 			},
 		})
-	}
-	for _, a := range attachments {
-		if a.NodeID != node.ID {
-			continue
+		for _, c := range checklists {
+			if c.NodeID != node.ID {
+				continue
+			}
+			children = append(children, map[string]interface{}{
+				"object": "block",
+				"type":   "to_do",
+				"to_do": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": c.Text}},
+					},
+					"checked": c.Done,
+				},
+			})
 		}
+	}
+
+	if len(attachments) > 0 {
+		any := false
+		for _, a := range attachments {
+			if a.NodeID == node.ID {
+				any = true
+				break
+			}
+		}
+		if any {
+			children = append(children, map[string]interface{}{
+				"object": "block",
+				"type":   "divider",
+				"divider": map[string]interface{}{},
+			})
+			children = append(children, map[string]interface{}{
+				"object": "block",
+				"type":   "heading_3",
+				"heading_3": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": "첨부"}},
+					},
+				},
+			})
+			for _, a := range attachments {
+				if a.NodeID != node.ID {
+					continue
+				}
+				children = append(children, map[string]interface{}{
+					"object": "block",
+					"type":   "bulleted_list_item",
+					"bulleted_list_item": map[string]interface{}{
+						"rich_text": []map[string]interface{}{
+							{
+								"type": "text",
+								"text": map[string]interface{}{
+									"content": a.Name,
+									"link": map[string]interface{}{
+										"url": a.URL,
+									},
+								},
+							},
+						},
+					},
+				})
+			}
+		}
+	}
+
+	if len(children) == 0 {
 		children = append(children, map[string]interface{}{
 			"object": "block",
 			"type":   "paragraph",
 			"paragraph": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("%s: %s", a.Name, a.URL)}},
+					{"type": "text", "text": map[string]interface{}{"content": "내용이 없습니다."}},
 				},
 			},
 		})
 	}
-	children = append(children, map[string]interface{}{
-		"object": "block",
-		"type":   "heading_3",
-		"heading_3": map[string]interface{}{
-			"rich_text": []map[string]interface{}{
-				{"type": "text", "text": map[string]interface{}{"content": "SIMVEX_END"}},
-			},
-		},
-	})
 	return children
 }
 
@@ -388,6 +485,13 @@ type notionBlock struct {
 			} `json:"text"`
 		} `json:"rich_text"`
 	} `json:"heading_3,omitempty"`
+	Toggle *struct {
+		RichText []struct {
+			Text struct {
+				Content string `json:"content"`
+			} `json:"text"`
+		} `json:"rich_text"`
+	} `json:"toggle,omitempty"`
 	ChildPage *struct {
 		Title string `json:"title"`
 	} `json:"child_page,omitempty"`
@@ -405,12 +509,33 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 	if err != nil {
 		return err
 	}
+
+	if toggleID := findSimvexToggle(blocks); toggleID != "" {
+		existing, err := s.listBlockChildren(ctx, token, toggleID)
+		if err != nil {
+			return err
+		}
+		for _, b := range existing {
+			if err := s.archiveBlock(ctx, token, b.ID); err != nil {
+				return err
+			}
+		}
+		payload := map[string]interface{}{
+			"children": children,
+		}
+		return s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/blocks/"+toggleID+"/children", payload, nil)
+	}
+
 	startDelete := false
 	for _, block := range blocks {
 		if block.Type == "heading_3" && block.Heading3 != nil && len(block.Heading3.RichText) > 0 {
 			text := block.Heading3.RichText[0].Text.Content
 			if text == "SIMVEX_START" {
 				startDelete = true
+				if err := s.archiveBlock(ctx, token, block.ID); err != nil {
+					return err
+				}
+				continue
 			}
 			if text == "SIMVEX_END" && startDelete {
 				if err := s.archiveBlock(ctx, token, block.ID); err != nil {
@@ -426,13 +551,34 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 			}
 		}
 	}
-	if len(children) == 0 {
-		return nil
-	}
+
 	payload := map[string]interface{}{
-		"children": children,
+		"children": []map[string]interface{}{
+			{
+				"object": "block",
+				"type":   "toggle",
+				"toggle": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{"type": "text", "text": map[string]interface{}{"content": "SIMVEX"}},
+					},
+				},
+				"children": children,
+			},
+		},
 	}
 	return s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/blocks/"+pageID+"/children", payload, nil)
+}
+
+func findSimvexToggle(blocks []notionBlock) string {
+	for _, block := range blocks {
+		if block.Type != "toggle" || block.Toggle == nil || len(block.Toggle.RichText) == 0 {
+			continue
+		}
+		if block.Toggle.RichText[0].Text.Content == "SIMVEX" {
+			return block.ID
+		}
+	}
+	return ""
 }
 
 func (s *NotionService) listBlockChildren(ctx context.Context, token, blockID string) ([]notionBlock, error) {
@@ -495,6 +641,11 @@ func (s *NotionService) pageHasSimvexMarker(ctx context.Context, token, pageID s
 		return false, err
 	}
 	for _, block := range blocks {
+		if block.Type == "toggle" && block.Toggle != nil && len(block.Toggle.RichText) > 0 {
+			if block.Toggle.RichText[0].Text.Content == "SIMVEX" {
+				return true, nil
+			}
+		}
 		if block.Type != "heading_3" || block.Heading3 == nil || len(block.Heading3.RichText) == 0 {
 			continue
 		}
