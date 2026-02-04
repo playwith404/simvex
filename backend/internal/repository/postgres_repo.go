@@ -612,6 +612,24 @@ func (r *PostgresRepository) SaveWorkflowFull(userID, projectID string, nodes []
 		return err
 	}
 
+	existingNotion := make(map[string]string)
+	rows, err := tx.Query(`SELECT id, COALESCE(notion_page_id, '') FROM workflow_nodes WHERE project_id = $1`, projectID)
+	if err != nil {
+		return rollback(tx, err)
+	}
+	for rows.Next() {
+		var id string
+		var notionID string
+		if err := rows.Scan(&id, &notionID); err != nil {
+			rows.Close()
+			return rollback(tx, err)
+		}
+		if notionID != "" {
+			existingNotion[id] = notionID
+		}
+	}
+	rows.Close()
+
 	if _, err := tx.Exec(`DELETE FROM workflow_edges WHERE project_id = $1`, projectID); err != nil {
 		return rollback(tx, err)
 	}
@@ -638,9 +656,15 @@ func (r *PostgresRepository) SaveWorkflowFull(userID, projectID string, nodes []
 		if err != nil {
 			return rollback(tx, err)
 		}
+		notionID := n.NotionPageID
+		if strings.TrimSpace(notionID) == "" {
+			if existing, ok := existingNotion[n.ID]; ok {
+				notionID = existing
+			}
+		}
 		if _, err := nodeStmt.Exec(
 			n.ID, projectID, n.Title, n.Description, dateVal, n.Progress, n.Color,
-			n.PositionX, n.PositionY, nullableText(n.LinkedPartID), nullableText(n.LinkedNoteID), nullableText(n.NotionPageID),
+			n.PositionX, n.PositionY, nullableText(n.LinkedPartID), nullableText(n.LinkedNoteID), nullableText(notionID),
 		); err != nil {
 			return rollback(tx, err)
 		}

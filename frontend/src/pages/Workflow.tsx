@@ -30,6 +30,7 @@ import type {
   WorkflowChecklist,
   WorkflowNode,
   WorkflowProject,
+  WorkflowFull,
 } from '../types'
 
 const emptyNodes: Node[] = []
@@ -158,14 +159,8 @@ export const Workflow = () => {
     }
   }, [])
 
-  useEffect(() => {
-    if (!activeProjectId) return
-    let alive = true
-    const fetchFull = async () => {
-      setHasLoadedProject(false)
-      setIsHydrating(true)
-      const full = await getWorkflowFull(activeProjectId)
-      if (!alive) return
+  const hydrateFromFull = useCallback(
+    (full: WorkflowFull) => {
       const mappedNodes: Node[] = full.nodes.map((n) => ({
         id: n.id,
         position: { x: n.positionX, y: n.positionY },
@@ -197,6 +192,19 @@ export const Workflow = () => {
       }))
       setNodes(mappedNodes)
       setEdges(mappedEdges)
+    },
+    [handleAddAttachment, handleNodeLabelChange, handleRemoveAttachment, handleSelectNode, setEdges, setNodes],
+  )
+
+  useEffect(() => {
+    if (!activeProjectId) return
+    let alive = true
+    const fetchFull = async () => {
+      setHasLoadedProject(false)
+      setIsHydrating(true)
+      const full = await getWorkflowFull(activeProjectId)
+      if (!alive) return
+      hydrateFromFull(full)
       setHasLoadedProject(true)
       setIsHydrating(false)
     }
@@ -210,7 +218,7 @@ export const Workflow = () => {
     return () => {
       alive = false
     }
-  }, [activeProjectId, handleAddAttachment, handleNodeLabelChange, handleRemoveAttachment, setEdges, setNodes])
+  }, [activeProjectId, hydrateFromFull, setEdges, setNodes])
 
   useEffect(() => {
     if (!selectedNodeId) return
@@ -314,7 +322,14 @@ export const Workflow = () => {
   const handleSyncNotion = async () => {
     try {
       setSaveStatus('Notion 동기화 중...')
+      if (activeProjectId) {
+        await saveWorkflowFull(activeProjectId, buildPayload())
+      }
       await notionSync()
+      if (activeProjectId) {
+        const full = await getWorkflowFull(activeProjectId)
+        hydrateFromFull(full)
+      }
       setSaveStatus('Notion 동기화 완료')
     } catch {
       setSaveStatus('Notion 동기화 실패')

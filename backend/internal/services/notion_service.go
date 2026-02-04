@@ -119,27 +119,56 @@ func (s *NotionService) SyncUser(ctx context.Context, userID string) error {
 			return err
 		}
 
+		objectNames := make(map[string]string)
+		objectNotes := make(map[string]string)
+		for _, node := range nodes {
+			objectID := strings.TrimSpace(node.LinkedPartID)
+			if objectID == "" {
+				continue
+			}
+			if _, ok := objectNames[objectID]; !ok {
+				obj, err := s.repo.GetObjectByID(objectID)
+				if err != nil {
+					return err
+				}
+				if obj != nil {
+					objectNames[objectID] = obj.Name
+				}
+			}
+			if _, ok := objectNotes[objectID]; !ok {
+				note, err := s.repo.GetNoteByPart(userID, objectID)
+				if err != nil {
+					return err
+				}
+				if note != nil {
+					objectNotes[objectID] = note.Content
+				}
+			}
+		}
+
 		keepPages := make(map[string]struct{}, len(nodes))
 		for _, node := range nodes {
 			if node.NotionPageID != "" {
 				keepPages[node.NotionPageID] = struct{}{}
 			}
+			objectName := objectNames[strings.TrimSpace(node.LinkedPartID)]
+			objectNote := objectNotes[strings.TrimSpace(node.LinkedPartID)]
 			if node.NotionPageID == "" {
-				pageID, err := s.createNodePage(ctx, token, projectPageID, node, checklists, attachments)
+				pageID, err := s.createNodePage(ctx, token, projectPageID, node, checklists, attachments, objectName, objectNote)
 				if err != nil {
 					return err
 				}
-				keepPages[pageID] = struct{}{} // 새로 생성된 페이지도 keepPages에 추가
+				keepPages[pageID] = struct{}{}
 				if err := s.repo.UpdateNodeNotionPageID(userID, project.ID, node.ID, pageID); err != nil {
 					return err
 				}
 			} else {
-				if err := s.updateNodeProperties(ctx, token, node, checklists, attachments); err != nil {
+				if err := s.updateNodeProperties(ctx, token, node, checklists, attachments, objectName, objectNote); err != nil {
 					return err
 				}
 			}
 		}
-		if err := s.cleanupOrphanNodePages(ctx, token, projectPageID, keepPages); err != nil {
+if err := s.cleanupOrphanNodePages(ctx, token, projectPageID, keepPages); err != nil {
 			return err
 		}
 	}
@@ -173,8 +202,8 @@ func (s *NotionService) createProjectPage(ctx context.Context, token, parentPage
 	return resp.ID, nil
 }
 
-func (s *NotionService) createNodePage(ctx context.Context, token, parentID string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment) (string, error) {
-	children := buildNodeChildren(node, checklists, attachments)
+func (s *NotionService) createNodePage(ctx context.Context, token, parentID string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment, objectName, objectNote string) (string, error) {
+	children := buildNodeChildren(node, checklists, attachments, objectName, objectNote)
 	props := map[string]interface{}{
 		"title": []map[string]interface{}{
 			{"text": map[string]interface{}{"content": node.Title}},
@@ -207,7 +236,7 @@ func (s *NotionService) updatePageTitle(ctx context.Context, token, pageID, titl
 	return s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/pages/"+pageID, payload, nil)
 }
 
-func (s *NotionService) updateNodeProperties(ctx context.Context, token string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment) error {
+func (s *NotionService) updateNodeProperties(ctx context.Context, token string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment, objectName, objectNote string) error {
 	props := map[string]interface{}{
 		"title": []map[string]interface{}{
 			{"text": map[string]interface{}{"content": node.Title}},
@@ -219,10 +248,10 @@ func (s *NotionService) updateNodeProperties(ctx context.Context, token string, 
 	if err := s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/pages/"+node.NotionPageID, payload, nil); err != nil {
 		return err
 	}
-	return s.replaceNodeChildren(ctx, token, node.NotionPageID, node, checklists, attachments)
+	return s.replaceNodeChildren(ctx, token, node.NotionPageID, node, checklists, attachments, objectName, objectNote)
 }
 
-func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment) []map[string]interface{} {
+func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment, objectName, objectNote string) []map[string]interface{} {
 	children := []map[string]interface{}{}
 	children = append(children, map[string]interface{}{
 		"object": "block",
@@ -269,6 +298,41 @@ func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChe
 			"paragraph": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
 					{"type": "text", "text": map[string]interface{}{"content": node.Description}},
+				},
+			},
+		})
+	}
+	if strings.TrimSpace(node.LinkedPartID) != "" {
+		label := objectName
+		if strings.TrimSpace(label) == "" {
+			label = node.LinkedPartID
+		}
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "paragraph",
+			"paragraph": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{"type": "text", "text": map[string]interface{}{"content": fmt.Sprintf("Object: %s", label)}},
+				},
+			},
+		})
+	}
+	if strings.TrimSpace(objectNote) != "" {
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "paragraph",
+			"paragraph": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{"type": "text", "text": map[string]interface{}{"content": "Object Note:"}},
+				},
+			},
+		})
+		children = append(children, map[string]interface{}{
+			"object": "block",
+			"type":   "paragraph",
+			"paragraph": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{"type": "text", "text": map[string]interface{}{"content": objectNote}},
 				},
 			},
 		})
@@ -335,8 +399,8 @@ type notionChildrenResponse struct {
 	NextCursor string        `json:"next_cursor"`
 }
 
-func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment) error {
-	children := buildNodeChildren(node, checklists, attachments)
+func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID string, node models.WorkflowNode, checklists []models.WorkflowChecklist, attachments []models.WorkflowAttachment, objectName, objectNote string) error {
+	children := buildNodeChildren(node, checklists, attachments, objectName, objectNote)
 	blocks, err := s.listBlockChildren(ctx, token, pageID)
 	if err != nil {
 		return err
