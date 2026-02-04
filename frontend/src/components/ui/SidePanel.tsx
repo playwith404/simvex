@@ -11,6 +11,8 @@ export const SidePanel = ({
   onTabChange,
   notes,
   onNotesChange,
+  onSaveNotes,
+  noteSaving,
   aiHistory,
   onSendMessage,
   aiLoading,
@@ -21,6 +23,8 @@ export const SidePanel = ({
   onTabChange: (tab: 'note' | 'ai') => void
   notes: string
   onNotesChange: (value: string) => void
+  onSaveNotes?: () => void
+  noteSaving?: boolean
   aiHistory: ChatMessage[]
   onSendMessage: (message: string) => void
   aiLoading: boolean
@@ -47,7 +51,21 @@ export const SidePanel = ({
       </div>
       <div className="side-panel__content">
         {activeTab === 'note' ? (
-          <NoteEditor value={notes} onChange={onNotesChange} />
+          <>
+            <NoteEditor value={notes} onChange={onNotesChange} />
+            {onSaveNotes && (
+              <div className="note-save">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={onSaveNotes}
+                  disabled={noteSaving}
+                >
+                  저장
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <AIChat history={aiHistory} isLoading={aiLoading} onSend={onSendMessage} />
         )}

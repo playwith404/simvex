@@ -364,12 +364,14 @@ export const Workflow = () => {
     }
     let alive = true
     setNoteLoading(true)
+    setNoteContent('')
     getPartNote(objectId)
       .then((res) => {
         if (!alive) return
-        if (res?.content) {
-          setNoteContent(res.content)
-        }
+        setNoteContent(res?.content ?? '')
+      })
+      .catch(() => {
+        if (alive) setNoteContent('')
       })
       .finally(() => {
         if (alive) setNoteLoading(false)

@@ -33,6 +33,7 @@ export const Viewer = () => {
   useEffect(() => {
     if (!objectId) return
     setLoading(true)
+    setNotes('')
     Promise.all([fetchObject(objectId), fetchParts(objectId)])
       .then(([obj, partsData]) => {
         setObject(obj)
@@ -47,9 +48,7 @@ export const Viewer = () => {
         return getPartNote(objectId).catch(() => null)
       })
       .then((note) => {
-        if (note?.content) {
-          setNotes(note.content)
-        }
+        setNotes(note?.content ?? '')
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -119,7 +118,7 @@ export const Viewer = () => {
     <div className="viewer-page">
       <div className="viewer-header">
         <div className="viewer-header__left">
-          <Link to="/objects" className="ghost" reloadDocument>← 목록</Link>
+          <Link to="/objects" className="ghost" reloadDocument>목록</Link>
           <h2>{object.name}</h2>
         </div>
         <div className="viewer-header__actions">
@@ -171,30 +170,20 @@ export const Viewer = () => {
           onTabChange={setActiveTab}
           notes={notes}
           onNotesChange={setNotes}
+          onSaveNotes={async () => {
+            if (!objectId) return
+            setNoteSaving(true)
+            try {
+              await savePartNote(objectId, notes)
+            } finally {
+              setNoteSaving(false)
+            }
+          }}
+          noteSaving={noteSaving}
           aiHistory={aiHistory}
           onSendMessage={handleSendMessage}
           aiLoading={aiLoading}
         />
-        {activeTab === 'note' && (
-          <div className="note-save">
-            <button
-              type="button"
-              className="ghost"
-              disabled={!objectId || noteSaving}
-              onClick={async () => {
-                if (!objectId) return
-                setNoteSaving(true)
-                try {
-                  await savePartNote(objectId, notes)
-                } finally {
-                  setNoteSaving(false)
-                }
-              }}
-            >
-              저장
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )
