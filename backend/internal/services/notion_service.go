@@ -216,18 +216,7 @@ func (s *NotionService) createNodePage(ctx context.Context, token, parentID stri
 		"properties": props,
 	}
 	if len(children) > 0 {
-		payload["children"] = []map[string]interface{}{
-			{
-				"object": "block",
-				"type":   "toggle",
-				"toggle": map[string]interface{}{
-					"rich_text": []map[string]interface{}{
-						{"type": "text", "text": map[string]interface{}{"content": "SIMVEX"}},
-					},
-				},
-				"children": children,
-			},
-		}
+		payload["children"] = children
 	}
 	var resp notionCreatePageResponse
 	if err := s.callNotion(ctx, token, "POST", "https://api.notion.com/v1/pages", payload, &resp); err != nil {
@@ -511,19 +500,9 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 	}
 
 	if toggleID := findSimvexToggle(blocks); toggleID != "" {
-		existing, err := s.listBlockChildren(ctx, token, toggleID)
-		if err != nil {
+		if err := s.archiveBlock(ctx, token, toggleID); err != nil {
 			return err
 		}
-		for _, b := range existing {
-			if err := s.archiveBlock(ctx, token, b.ID); err != nil {
-				return err
-			}
-		}
-		payload := map[string]interface{}{
-			"children": children,
-		}
-		return s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/blocks/"+toggleID+"/children", payload, nil)
 	}
 
 	startDelete := false
@@ -553,18 +532,7 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 	}
 
 	payload := map[string]interface{}{
-		"children": []map[string]interface{}{
-			{
-				"object": "block",
-				"type":   "toggle",
-				"toggle": map[string]interface{}{
-					"rich_text": []map[string]interface{}{
-						{"type": "text", "text": map[string]interface{}{"content": "SIMVEX"}},
-					},
-				},
-				"children": children,
-			},
-		},
+		"children": children,
 	}
 	return s.callNotion(ctx, token, "PATCH", "https://api.notion.com/v1/blocks/"+pageID+"/children", payload, nil)
 }
@@ -574,7 +542,8 @@ func findSimvexToggle(blocks []notionBlock) string {
 		if block.Type != "toggle" || block.Toggle == nil || len(block.Toggle.RichText) == 0 {
 			continue
 		}
-		if block.Toggle.RichText[0].Text.Content == "SIMVEX" {
+		title := block.Toggle.RichText[0].Text.Content
+		if title == "SIMVEX" || title == "워크플로우 상세" {
 			return block.ID
 		}
 	}
@@ -642,7 +611,8 @@ func (s *NotionService) pageHasSimvexMarker(ctx context.Context, token, pageID s
 	}
 	for _, block := range blocks {
 		if block.Type == "toggle" && block.Toggle != nil && len(block.Toggle.RichText) > 0 {
-			if block.Toggle.RichText[0].Text.Content == "SIMVEX" {
+			title := block.Toggle.RichText[0].Text.Content
+			if title == "SIMVEX" || title == "워크플로우 상세" {
 				return true, nil
 			}
 		}
