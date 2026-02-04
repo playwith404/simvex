@@ -334,6 +334,7 @@ button.ghost {
   display: grid;
   grid-template-columns: minmax(0, 2.5fr) minmax(300px, 1fr);
   gap: 16px;
+  overflow: hidden;
 }
 
 .viewer-canvas {
@@ -343,6 +344,8 @@ button.ghost {
   padding: 8px;
   min-height: 400px;
   position: relative;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .viewer-canvas canvas {
