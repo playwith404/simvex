@@ -371,6 +371,16 @@ func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChe
 	}
 
 	if len(checklists) > 0 {
+		anyChecklist := false
+		for _, c := range checklists {
+			if c.NodeID == node.ID {
+				anyChecklist = true
+				break
+			}
+		}
+		if !anyChecklist {
+			goto attachmentsSection
+		}
 		children = append(children, map[string]interface{}{
 			"object": "block",
 			"type":   "divider",
@@ -402,6 +412,7 @@ func buildNodeChildren(node models.WorkflowNode, checklists []models.WorkflowChe
 		}
 	}
 
+attachmentsSection:
 	if len(attachments) > 0 {
 		any := false
 		for _, a := range attachments {
@@ -499,35 +510,9 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 		return err
 	}
 
-	if toggleID := findSimvexToggle(blocks); toggleID != "" {
-		if err := s.archiveBlock(ctx, token, toggleID); err != nil {
-			return err
-		}
-	}
-
-	startDelete := false
 	for _, block := range blocks {
-		if block.Type == "heading_3" && block.Heading3 != nil && len(block.Heading3.RichText) > 0 {
-			text := block.Heading3.RichText[0].Text.Content
-			if text == "SIMVEX_START" {
-				startDelete = true
-				if err := s.archiveBlock(ctx, token, block.ID); err != nil {
-					return err
-				}
-				continue
-			}
-			if text == "SIMVEX_END" && startDelete {
-				if err := s.archiveBlock(ctx, token, block.ID); err != nil {
-					return err
-				}
-				startDelete = false
-				continue
-			}
-		}
-		if startDelete {
-			if err := s.archiveBlock(ctx, token, block.ID); err != nil {
-				return err
-			}
+		if err := s.archiveBlock(ctx, token, block.ID); err != nil {
+			return err
 		}
 	}
 
@@ -538,15 +523,6 @@ func (s *NotionService) replaceNodeChildren(ctx context.Context, token, pageID s
 }
 
 func findSimvexToggle(blocks []notionBlock) string {
-	for _, block := range blocks {
-		if block.Type != "toggle" || block.Toggle == nil || len(block.Toggle.RichText) == 0 {
-			continue
-		}
-		title := block.Toggle.RichText[0].Text.Content
-		if title == "SIMVEX" || title == "워크플로우 상세" {
-			return block.ID
-		}
-	}
 	return ""
 }
 
@@ -619,7 +595,8 @@ func (s *NotionService) pageHasSimvexMarker(ctx context.Context, token, pageID s
 		if block.Type != "heading_3" || block.Heading3 == nil || len(block.Heading3.RichText) == 0 {
 			continue
 		}
-		if block.Heading3.RichText[0].Text.Content == "SIMVEX_START" {
+		text := block.Heading3.RichText[0].Text.Content
+		if text == "SIMVEX_START" || text == "노드 요약" {
 			return true, nil
 		}
 	}
