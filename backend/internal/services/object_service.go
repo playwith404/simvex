@@ -28,3 +28,7 @@ func (s *ObjectService) GetPartsByObjectID(id string) ([]models.Part, error) {
 func (s *ObjectService) GetPartByID(id string) (*models.Part, error) {
 	return s.repo.GetPartByID(id)
 }
+
+func (s *ObjectService) GetObjectVersions(objectID string) ([]models.Object, error) {
+	return s.repo.GetObjectVersions(objectID)
+}

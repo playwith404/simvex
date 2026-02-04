@@ -10,5 +10,7 @@ type Object struct {
 	ModelPath   string    `json:"modelPath"`
 	Theory      string    `json:"theory"`
 	Category    string    `json:"category"`
+	Version     string    `json:"version"`
+	ParentID    string    `json:"parentId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }

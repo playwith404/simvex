@@ -49,6 +49,7 @@ func RegisterRoutes(
 		api.GET("/objects/:id", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetObject)
 		api.GET("/objects/:id/model", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetObjectModel)
 		api.GET("/objects/:id/parts", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetPartsByObject)
+		api.GET("/objects/:id/versions", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), objectHandler.GetVersions)
 		api.GET("/parts/:partId", objectLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), partHandler.GetPart)
 
 		api.POST("/ai/chat", aiLimiter.Middleware("RATE_LIMIT_EXCEEDED", "잠시 후 다시 시도해주세요"), aiHandler.Chat)

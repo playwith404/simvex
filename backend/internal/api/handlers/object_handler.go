@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"simvex/internal/models"
 	"simvex/internal/services"
 )
 
@@ -60,4 +61,17 @@ func (h *ObjectHandler) GetPartsByObject(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, parts)
+}
+
+func (h *ObjectHandler) GetVersions(c *gin.Context) {
+	id := c.Param("id")
+	versions, err := h.service.GetObjectVersions(id)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "서버 오류가 발생했습니다", nil)
+		return
+	}
+	if versions == nil {
+		versions = []models.Object{}
+	}
+	c.JSON(http.StatusOK, versions)
 }

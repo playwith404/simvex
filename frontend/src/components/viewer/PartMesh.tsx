@@ -1,9 +1,7 @@
 import { useMemo, useEffect } from 'react'
 import { useGLTF } from '@react-three/drei'
-import type { Group, Mesh, MeshStandardMaterial } from 'three'
-import type { Part } from '../../types'
-
-useGLTF.preload('/assets/models/engine-v4/piston.glb')
+import type { Group, Mesh, MeshStandardMaterial, Plane } from 'three'
+import type { Part, ViewerMode } from '../../types'
 
 type Props = {
   part: Part
@@ -12,9 +10,13 @@ type Props = {
   isHovered: boolean
   onSelect: (partId: string) => void
   onHover: (partId: string | null) => void
+  mode: ViewerMode
+  onMeasurePoint?: (point: { x: number; y: number; z: number }) => void
+  clippingPlanes: Plane[]
 }
 
 const highlightColor = '#f8c86a'
+const measureHighlight = '#ff6b6b'
 
 export const PartMesh = ({
   part,
@@ -23,6 +25,9 @@ export const PartMesh = ({
   isHovered,
   onSelect,
   onHover,
+  mode,
+  onMeasurePoint,
+  clippingPlanes,
 }: Props) => {
   const gltf = useGLTF(part.modelPath) as { scene: Group }
 
@@ -39,16 +44,20 @@ export const PartMesh = ({
       }
       const active = isSelected || isHovered
       if (active) {
-        material.color.set(highlightColor)
-        material.emissive.set(highlightColor)
+        const color = mode === 'measure' && isSelected ? measureHighlight : highlightColor
+        material.color.set(color)
+        material.emissive.set(color)
         material.emissiveIntensity = isSelected ? 0.6 : 0.3
       } else {
         material.color.copy(material.userData.baseColor)
         material.emissive.copy(material.userData.baseEmissive)
         material.emissiveIntensity = 0
       }
+      material.clippingPlanes = clippingPlanes
+      material.clipShadows = true
+      material.needsUpdate = true
     })
-  }, [scene, isSelected, isHovered])
+  }, [scene, isSelected, isHovered, clippingPlanes, mode])
 
   const offsetX = part.decomposeDirX * part.decomposeDistance * decompositionLevel
   const offsetY = part.decomposeDirY * part.decomposeDistance * decompositionLevel
@@ -67,7 +76,11 @@ export const PartMesh = ({
       }}
       onPointerDown={(e) => {
         e.stopPropagation()
-        onSelect(part.id)
+        if (mode === 'measure' && onMeasurePoint) {
+          onMeasurePoint({ x: e.point.x, y: e.point.y, z: e.point.z })
+        } else {
+          onSelect(part.id)
+        }
       }}
     >
       <primitive object={scene} />

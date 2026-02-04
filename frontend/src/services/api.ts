@@ -45,6 +45,11 @@ export const fetchParts = async (id: string): Promise<Part[]> => {
   return handle<Part[]>(res)
 }
 
+export const fetchObjectVersions = async (id: string): Promise<ObjectModel[]> => {
+  const res = await fetchJson(`${API_BASE}/objects/${id}/versions`, { method: 'GET' })
+  return handle<ObjectModel[]>(res)
+}
+
 export const fetchPart = async (partId: string): Promise<Part> => {
   const res = await fetchJson(`${API_BASE}/parts/${partId}`, { method: 'GET' })
   return handle<Part>(res)

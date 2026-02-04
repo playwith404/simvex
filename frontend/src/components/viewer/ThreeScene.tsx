@@ -1,18 +1,19 @@
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { GizmoHelper, GizmoViewport, Environment } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, Environment, Line, Html } from '@react-three/drei'
 import {
   Box3,
   Color,
   Group,
   LinearFilter,
   PerspectiveCamera,
+  Plane,
   RGBAFormat,
   UnsignedByteType,
   Vector3,
   WebGLRenderTarget,
 } from 'three'
-import type { Part } from '../../types'
+import type { Part, Measurement, ViewerMode } from '../../types'
 import type { PdfImageData } from '../../types/pdf'
 import { PartMesh } from './PartMesh'
 import { CameraControls } from './CameraControls'
@@ -38,6 +39,72 @@ type Props = {
   }) => void
   onCanvasReady?: (canvas: HTMLCanvasElement) => void
   onCaptureReady?: (capture: () => PdfImageData | null) => void
+  hiddenPartIds: Set<string>
+  mode: ViewerMode
+  onMeasurePoint?: (point: { x: number; y: number; z: number }) => void
+  measurements: Measurement[]
+  pendingPoint: { x: number; y: number; z: number } | null
+  clipEnabled: boolean
+  clipAxis: 'x' | 'y' | 'z'
+  clipPosition: number
+}
+
+const ClippingSetup = ({ enabled }: { enabled: boolean }) => {
+  const { gl } = useThree()
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- Three.js renderer requires direct mutation
+    gl.localClippingEnabled = enabled
+  }, [gl, enabled])
+  return null
+}
+
+const MeasurementOverlay = ({
+  measurements,
+  pendingPoint,
+}: {
+  measurements: Measurement[]
+  pendingPoint: { x: number; y: number; z: number } | null
+}) => {
+  return (
+    <>
+      {measurements.map((m) => {
+        const mid = {
+          x: (m.start.x + m.end.x) / 2,
+          y: (m.start.y + m.end.y) / 2,
+          z: (m.start.z + m.end.z) / 2,
+        }
+        return (
+          <group key={m.id}>
+            <Line
+              points={[
+                [m.start.x, m.start.y, m.start.z],
+                [m.end.x, m.end.y, m.end.z],
+              ]}
+              color="#ff6b6b"
+              lineWidth={2}
+            />
+            <mesh position={[m.start.x, m.start.y, m.start.z]}>
+              <sphereGeometry args={[0.02, 12, 12]} />
+              <meshBasicMaterial color="#ff6b6b" />
+            </mesh>
+            <mesh position={[m.end.x, m.end.y, m.end.z]}>
+              <sphereGeometry args={[0.02, 12, 12]} />
+              <meshBasicMaterial color="#ff6b6b" />
+            </mesh>
+            <Html position={[mid.x, mid.y + 0.08, mid.z]} center>
+              <div className="measure-label">{m.distance.toFixed(4)}</div>
+            </Html>
+          </group>
+        )
+      })}
+      {pendingPoint && (
+        <mesh position={[pendingPoint.x, pendingPoint.y, pendingPoint.z]}>
+          <sphereGeometry args={[0.03, 12, 12]} />
+          <meshBasicMaterial color="#ff6b6b" />
+        </mesh>
+      )}
+    </>
+  )
 }
 
 const CaptureBridge = ({
@@ -54,8 +121,6 @@ const CaptureBridge = ({
     if (!onCaptureReady) return
 
     onCaptureReady(() => {
-      // Render to an offscreen target so we don't need preserveDrawingBuffer=true on the main canvas.
-      // This keeps normal rendering lighter/safer and makes PDF capture deterministic across browsers.
       const renderToDataUrl = (width: number, height: number): string => {
         const prevTarget = gl.getRenderTarget()
         const prevAutoClear = gl.autoClear
@@ -87,7 +152,6 @@ const CaptureBridge = ({
           target.dispose()
         }
 
-        // Flip Y (WebGL origin is bottom-left).
         const canvas = document.createElement('canvas')
         canvas.width = width
         canvas.height = height
@@ -126,7 +190,7 @@ const CaptureBridge = ({
       const prevZoom = camera.zoom
       const prevNear = camera.near
       const prevFar = camera.far
-      const prevTarget = controls?.target?.clone()
+      const prevCTarget = controls?.target?.clone()
 
       if (!(camera instanceof PerspectiveCamera)) {
         const dataUrl = renderToDataUrl(capW, capH)
@@ -141,8 +205,8 @@ const CaptureBridge = ({
       const fitHeightDistance = (size.y / 2) / Math.tan(fov / 2)
       const distance = Math.max(fitWidthDistance, fitHeightDistance) * margin
 
-      const target = prevTarget ?? new Vector3(0, 0, 0)
-      const direction = new Vector3().subVectors(camera.position, target)
+      const cTarget = prevCTarget ?? new Vector3(0, 0, 0)
+      const direction = new Vector3().subVectors(camera.position, cTarget)
       if (direction.lengthSq() === 0) {
         direction.set(0, 0, 1)
       } else {
@@ -168,8 +232,8 @@ const CaptureBridge = ({
       camera.far = prevFar
       camera.updateProjectionMatrix()
 
-      if (controls?.target && prevTarget) {
-        controls.target.copy(prevTarget)
+      if (controls?.target && prevCTarget) {
+        controls.target.copy(prevCTarget)
         controls.update?.()
       }
 
@@ -194,6 +258,14 @@ export const ThreeScene = ({
   onViewStateChange,
   onCanvasReady,
   onCaptureReady,
+  hiddenPartIds,
+  mode,
+  onMeasurePoint,
+  measurements,
+  pendingPoint,
+  clipEnabled,
+  clipAxis,
+  clipPosition,
 }: Props) => {
   const cameraPosition = useMemo<[number, number, number]>(
     () =>
@@ -204,10 +276,24 @@ export const ThreeScene = ({
   )
   const partsGroupRef = useRef<Group | null>(null)
 
+  const visibleParts = useMemo(
+    () => parts.filter((p) => !hiddenPartIds.has(p.id)),
+    [parts, hiddenPartIds],
+  )
+
+  const clippingPlanes = useMemo(() => {
+    if (!clipEnabled) return []
+    const normal = new Vector3(
+      clipAxis === 'x' ? -1 : 0,
+      clipAxis === 'y' ? -1 : 0,
+      clipAxis === 'z' ? -1 : 0,
+    )
+    return [new Plane(normal, clipPosition)]
+  }, [clipEnabled, clipAxis, clipPosition])
+
   return (
     <Canvas
       camera={{ position: cameraPosition, fov: 45 }}
-      // Cap DPR to reduce GPU memory pressure (helps prevent Chrome "Aw, Snap" tab crashes on heavy WebGL scenes).
       dpr={[1, 1.5]}
       gl={{ preserveDrawingBuffer: false, antialias: false, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
@@ -217,9 +303,10 @@ export const ThreeScene = ({
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 8, 6]} intensity={0.9} />
       <directionalLight position={[-5, -2, -3]} intensity={0.4} />
+      <ClippingSetup enabled={clipEnabled} />
       <Suspense fallback={null}>
         <group ref={partsGroupRef}>
-          {parts.map((part) => (
+          {visibleParts.map((part) => (
             <PartMesh
               key={part.id}
               part={part}
@@ -228,11 +315,15 @@ export const ThreeScene = ({
               isHovered={hoveredPartId === part.id}
               onSelect={onSelectPart}
               onHover={onHoverPart}
+              mode={mode}
+              onMeasurePoint={onMeasurePoint}
+              clippingPlanes={clippingPlanes}
             />
           ))}
         </group>
         <Environment preset="studio" />
       </Suspense>
+      <MeasurementOverlay measurements={measurements} pendingPoint={pendingPoint} />
       <CaptureBridge onCaptureReady={onCaptureReady} partsGroupRef={partsGroupRef} />
       <CameraControls viewState={viewState} onChange={onViewStateChange} />
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>

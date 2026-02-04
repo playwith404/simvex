@@ -6,6 +6,8 @@ export type ObjectModel = {
   modelPath: string
   theory: string
   category: string
+  version: string
+  parentId?: string
   createdAt: string
 }
 
@@ -44,6 +46,21 @@ export type StoredData = {
   notes: string
   aiHistory: ChatMessage[]
   lastUpdated: string
+}
+
+export type Measurement = {
+  id: string
+  start: { x: number; y: number; z: number }
+  end: { x: number; y: number; z: number }
+  distance: number
+}
+
+export type ViewerMode = 'select' | 'measure'
+
+export type ClipState = {
+  enabled: boolean
+  axis: 'x' | 'y' | 'z'
+  position: number
 }
 
 export type WorkflowProject = {
