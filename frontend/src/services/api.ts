@@ -20,40 +20,37 @@ const handle = async <T>(res: Response): Promise<T> => {
   return res.json() as Promise<T>
 }
 
-const fetchJson = (input: RequestInfo, init?: RequestInit) =>
-  fetch(input, {
+const fetchJson = (input: RequestInfo, init?: RequestInit) => {
+  const headers = new Headers(init?.headers)
+  if (init?.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  return fetch(input, {
     credentials: 'include',
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    headers,
   })
-
-export const fetchObjects = async (): Promise<ObjectModel[]> => {
-  const res = await fetchJson(`${API_BASE}/objects`, { method: 'GET' })
-  return handle<ObjectModel[]>(res)
 }
 
-export const fetchObject = async (id: string): Promise<ObjectModel> => {
-  const res = await fetchJson(`${API_BASE}/objects/${id}`, { method: 'GET' })
-  return handle<ObjectModel>(res)
+const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const res = await fetchJson(`${API_BASE}${path}`, init)
+  return handle<T>(res)
 }
 
-export const fetchParts = async (id: string): Promise<Part[]> => {
-  const res = await fetchJson(`${API_BASE}/objects/${id}/parts`, { method: 'GET' })
-  return handle<Part[]>(res)
-}
+export const fetchObjects = async (): Promise<ObjectModel[]> => requestJson<ObjectModel[]>('/objects')
 
-export const fetchObjectVersions = async (id: string): Promise<ObjectModel[]> => {
-  const res = await fetchJson(`${API_BASE}/objects/${id}/versions`, { method: 'GET' })
-  return handle<ObjectModel[]>(res)
-}
+export const fetchObject = async (id: string): Promise<ObjectModel> =>
+  requestJson<ObjectModel>(`/objects/${id}`)
 
-export const fetchPart = async (partId: string): Promise<Part> => {
-  const res = await fetchJson(`${API_BASE}/parts/${partId}`, { method: 'GET' })
-  return handle<Part>(res)
-}
+export const fetchParts = async (id: string): Promise<Part[]> =>
+  requestJson<Part[]>(`/objects/${id}/parts`)
+
+export const fetchObjectVersions = async (id: string): Promise<ObjectModel[]> =>
+  requestJson<ObjectModel[]>(`/objects/${id}/versions`)
+
+export const fetchPart = async (partId: string): Promise<Part> =>
+  requestJson<Part>(`/parts/${partId}`)
 
 export const sendChat = async (payload: {
   objectId: string
@@ -61,48 +58,42 @@ export const sendChat = async (payload: {
   userMessage: string
   history: ChatMessage[]
 }): Promise<{ assistantMessage: string }> => {
-  const res = await fetchJson(`${API_BASE}/ai/chat`, {
+  return requestJson<{ assistantMessage: string }>('/ai/chat', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ assistantMessage: string }>(res)
 }
 
 export const register = async (payload: { email: string; password: string }) => {
-  const res = await fetchJson(`${API_BASE}/auth/register`, {
+  return requestJson<{ message: string }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const verifyEmail = async (payload: { email: string; code: string }) => {
-  const res = await fetchJson(`${API_BASE}/auth/verify`, {
+  return requestJson<{ message: string }>('/auth/verify', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const login = async (payload: { email: string; password: string }) => {
-  const res = await fetchJson(`${API_BASE}/auth/login`, {
+  return requestJson<{ message: string }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const logout = async () => {
-  const res = await fetchJson(`${API_BASE}/auth/logout`, { method: 'POST' })
-  return handle<{ message: string }>(res)
+  return requestJson<{ message: string }>('/auth/logout', { method: 'POST' })
 }
 
 export const requestPasswordReset = async (payload: { email: string }) => {
-  const res = await fetchJson(`${API_BASE}/auth/password/reset-request`, {
+  return requestJson<{ message: string }>('/auth/password/reset-request', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const confirmPasswordReset = async (payload: {
@@ -110,43 +101,35 @@ export const confirmPasswordReset = async (payload: {
   code: string
   newPassword: string
 }) => {
-  const res = await fetchJson(`${API_BASE}/auth/password/reset-confirm`, {
+  return requestJson<{ message: string }>('/auth/password/reset-confirm', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
-export const listProjects = async (): Promise<WorkflowProject[]> => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects`, { method: 'GET' })
-  return handle<WorkflowProject[]>(res)
-}
+export const listProjects = async (): Promise<WorkflowProject[]> =>
+  requestJson<WorkflowProject[]>('/workflow/projects')
 
 export const createProject = async (title: string): Promise<WorkflowProject> => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects`, {
+  return requestJson<WorkflowProject>('/workflow/projects', {
     method: 'POST',
     body: JSON.stringify({ title }),
   })
-  return handle<WorkflowProject>(res)
 }
 
 export const updateProject = async (id: string, title: string): Promise<WorkflowProject> => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects/${id}`, {
+  return requestJson<WorkflowProject>(`/workflow/projects/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ title }),
   })
-  return handle<WorkflowProject>(res)
 }
 
 export const deleteProject = async (id: string) => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects/${id}`, { method: 'DELETE' })
-  return handle<{ message: string }>(res)
+  return requestJson<{ message: string }>(`/workflow/projects/${id}`, { method: 'DELETE' })
 }
 
-export const getWorkflowFull = async (projectId: string): Promise<WorkflowFull> => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects/${projectId}/full`, { method: 'GET' })
-  return handle<WorkflowFull>(res)
-}
+export const getWorkflowFull = async (projectId: string): Promise<WorkflowFull> =>
+  requestJson<WorkflowFull>(`/workflow/projects/${projectId}/full`)
 
 export const saveWorkflowFull = async (
   projectId: string,
@@ -157,54 +140,46 @@ export const saveWorkflowFull = async (
     attachments: WorkflowAttachment[]
   },
 ) => {
-  const res = await fetchJson(`${API_BASE}/workflow/projects/${projectId}/full`, {
+  return requestJson<{ message: string }>(`/workflow/projects/${projectId}/full`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const notionStatus = async (): Promise<{ connected: boolean }> => {
-  const res = await fetchJson(`${API_BASE}/notion/status`, { method: 'GET' })
-  return handle<{ connected: boolean }>(res)
+  return requestJson<{ connected: boolean }>('/notion/status')
 }
 
 export const notionConnect = async (token: string, parentPageId: string) => {
-  const res = await fetchJson(`${API_BASE}/notion/connect`, {
+  return requestJson<{ message: string }>('/notion/connect', {
     method: 'POST',
     body: JSON.stringify({ token, parentPageId }),
   })
-  return handle<{ message: string }>(res)
 }
 
 export const notionDisconnect = async () => {
-  const res = await fetchJson(`${API_BASE}/notion/disconnect`, { method: 'DELETE' })
-  return handle<{ message: string }>(res)
+  return requestJson<{ message: string }>('/notion/disconnect', { method: 'DELETE' })
 }
 
 export const notionSync = async () => {
-  const res = await fetchJson(`${API_BASE}/notion/sync`, { method: 'POST' })
-  return handle<{ message: string }>(res)
+  return requestJson<{ message: string }>('/notion/sync', { method: 'POST' })
 }
 
 export const getMe = async (): Promise<{ id: string; email: string } | null> => {
   try {
-    const res = await fetchJson(`${API_BASE}/auth/me`, { method: 'GET' })
-    return await handle<{ id: string; email: string }>(res)
+    return await requestJson<{ id: string; email: string }>('/auth/me')
   } catch {
     return null
   }
 }
 
 export const getPartNote = async (partId: string) => {
-  const res = await fetchJson(`${API_BASE}/parts/${partId}/note`, { method: 'GET' })
-  return handle<{ content?: string }>(res)
+  return requestJson<{ content?: string }>(`/parts/${partId}/note`)
 }
 
 export const savePartNote = async (partId: string, content: string) => {
-  const res = await fetchJson(`${API_BASE}/parts/${partId}/note`, {
+  return requestJson<{ id: string; content: string }>(`/parts/${partId}/note`, {
     method: 'PUT',
     body: JSON.stringify({ content }),
   })
-  return handle<{ id: string; content: string }>(res)
 }
