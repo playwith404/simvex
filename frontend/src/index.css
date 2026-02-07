@@ -478,6 +478,9 @@ button.ghost {
   border-radius: 12px;
   font-size: 13px;
   background: rgba(255, 255, 255, 0.06);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .ai-chat__bubble.user {
