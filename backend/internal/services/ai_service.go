@@ -74,6 +74,11 @@ func BuildSystemPrompt(object *models.Object, part *models.Part) string {
 	prompt += "불확실한 정보는 '확인이 필요합니다'라고 명시하세요.\n"
 	prompt += "기본 답변은 간결하게 작성하세요: 최대 4문장 또는 불릿 4개 이내.\n"
 	prompt += "수식/배경지식의 장문 설명은 사용자가 '자세히', '심화', '길게'를 요청할 때만 제공하세요.\n"
-	prompt += "사용자 질문이 단순 설명 요청이면 '한 줄 요약 + 핵심 3가지' 형식으로 답변하세요."
+	prompt += "사용자 질문이 단순 설명 요청이면 아래 형식을 반드시 지키세요.\n"
+	prompt += "한 줄 요약: ...\n"
+	prompt += "핵심 3가지\n"
+	prompt += "- ...\n"
+	prompt += "- ...\n"
+	prompt += "- ..."
 	return prompt
 }
