@@ -41,7 +41,6 @@ func (c *Client) Chat(ctx context.Context, systemPrompt string, history []models
 	resp, err := c.client.CreateChatCompletion(ctx, goopenai.ChatCompletionRequest{
 		Model:    c.model,
 		Messages: messages,
-		Temperature: 0.4,
 	})
 	if err != nil {
 		return "", err
