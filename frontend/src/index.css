@@ -71,11 +71,16 @@ textarea {
 .nav {
   display: flex;
   gap: 20px;
+  align-items: center;
 }
 
 .nav a {
+  display: inline-flex;
+  align-items: center;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .nav a.active {
@@ -83,10 +88,15 @@ textarea {
 }
 
 .nav-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
   font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
   padding: 6px 14px;
   border-radius: 999px;
   cursor: pointer;
