@@ -61,11 +61,15 @@ textarea {
   z-index: 10;
 }
 
-.logo a {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 24px;
-  letter-spacing: 1px;
-  color: var(--accent);
+.logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.logo:hover {
+  opacity: 0.85;
 }
 
 .nav {
@@ -1227,6 +1231,7 @@ button.ghost {
 }
 
 @media (max-width: 960px) {
+
   .app-header,
   .app-main,
   .app-footer {
